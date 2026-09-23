@@ -1,0 +1,1690 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>月球 LUNA · 观测器</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='%23d8d8d8'/%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#04060a; --panel:rgba(9,13,20,.66); --line:rgba(255,255,255,.075);
+  --txt:rgba(228,236,248,.94); --dim:rgba(180,194,214,.62); --dim2:rgba(148,164,188,.44);
+  --accent:#7fb0ff; --hl:#e0a44a;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{
+  background:var(--bg); color:var(--txt); overflow:hidden;
+  font:400 12px/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  -webkit-font-smoothing:antialiased; user-select:none; -webkit-user-select:none;
+  -webkit-tap-highlight-color:transparent;
+}
+canvas{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+canvas.dragging{cursor:grabbing}
+body.hide-ui .card,body.hide-ui .panel-right,body.hide-ui #labels{opacity:0;pointer-events:none}
+.card,.panel-right,#labels{transition:opacity .35s ease}
+
+/* ── 卡片通用 ── */
+.card{position:fixed;background:var(--panel);backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px) saturate(1.2);
+  border:1px solid var(--line);border-radius:11px;box-shadow:0 12px 36px rgba(0,0,0,.5)}
+
+/* ── 左上：标题 ── */
+.card-title{top:10px;left:10px;padding:9px 14px 10px}
+.card-title h1{margin:0;font-size:15px;font-weight:600;letter-spacing:.2em;display:flex;align-items:baseline;gap:9px;line-height:1.1}
+.card-title h1 span{font:400 10.5px var(--mono);letter-spacing:.24em;color:var(--accent);opacity:.95}
+.card-title .meta{margin-top:7px;font-size:10.5px;color:var(--dim);letter-spacing:.02em;line-height:1.72;white-space:nowrap}
+.card-title .meta b{font-weight:400;color:var(--dim2);margin-right:4px}
+.card-title .meta i{display:inline-block;width:1px;height:9px;background:var(--line);margin:0 9px;vertical-align:-.5px}
+
+/* ── 左下：观测数据 ── */
+.card-stats{bottom:10px;left:10px;width:216px;padding:10px 13px 9px}
+.card-stats h2{margin:0 0 7px;font-size:10px;font-weight:500;letter-spacing:.18em;color:var(--dim2)}
+.card-stats dl{margin:0}
+.card-stats dl>div{display:flex;justify-content:space-between;align-items:baseline;gap:10px;line-height:1.76}
+.card-stats dt{font-size:11px;color:var(--dim2);letter-spacing:.02em}
+.card-stats dd{margin:0;font-family:var(--mono);font-size:10.5px;font-variant-numeric:tabular-nums;color:rgba(234,240,250,.9)}
+.card-stats dd.hl{color:var(--hl)}
+.card-stats .hint{margin:9px 0 0;padding-top:8px;border-top:1px solid var(--line);font-size:9.5px;line-height:1.5;color:rgba(138,154,178,.5);letter-spacing:.02em}
+
+/* ── 右侧：控制面板 ── */
+.panel-right{position:fixed;top:10px;right:10px;width:238px;max-height:calc(100% - 20px);overflow-y:auto;overscroll-behavior:contain;
+  padding:11px 12px 12px;background:var(--panel);backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px) saturate(1.2);
+  border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 36px rgba(0,0,0,.5);scrollbar-width:thin}
+.panel-right::-webkit-scrollbar{width:6px}
+.panel-right::-webkit-scrollbar-thumb{background:rgba(255,255,255,.13);border-radius:3px}
+.sect+.sect{margin-top:12px;padding-top:11px;border-top:1px solid var(--line)}
+.sect h3{margin:0 0 8px;font-size:10px;font-weight:500;letter-spacing:.18em;color:var(--dim2)}
+
+.btns{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.btns button{font-family:inherit;font-size:11px;font-weight:400;letter-spacing:.02em;color:rgba(226,234,246,.86);
+  background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.09);border-radius:7px;padding:8px 5px;cursor:pointer;
+  transition:background .16s,border-color .16s,color .16s}
+.btns button:hover{background:rgba(127,176,255,.13);border-color:rgba(127,176,255,.34);color:#fff}
+.btns button:active{transform:translateY(1px)}
+.btns button.wide{grid-column:span 2}
+.btns button.on{background:rgba(127,176,255,.2);border-color:rgba(127,176,255,.5);color:#dce9ff}
+
+.row{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:11px;color:var(--dim);letter-spacing:.02em;margin-top:9px}
+.row:first-of-type{margin-top:2px}
+.row b{font-family:var(--mono);font-weight:400;font-size:10.5px;color:var(--accent);font-variant-numeric:tabular-nums}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:15px;background:none;margin:1px 0 0;cursor:pointer;display:block}
+input[type=range]:focus{outline:none}
+input[type=range]::-webkit-slider-runnable-track{height:3px;border-radius:2px;background:rgba(255,255,255,.13)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;margin-top:-4.5px;border-radius:50%;
+  background:#8ab6ff;box-shadow:0 0 0 3px rgba(127,176,255,.13),0 1px 4px rgba(0,0,0,.55);transition:transform .12s}
+input[type=range]:active::-webkit-slider-thumb{transform:scale(1.18)}
+input[type=range]::-moz-range-track{height:3px;border-radius:2px;background:rgba(255,255,255,.13)}
+input[type=range]::-moz-range-thumb{width:12px;height:12px;border:none;border-radius:50%;background:#8ab6ff;box-shadow:0 0 0 3px rgba(127,176,255,.13)}
+
+.swrow{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:11px;color:var(--dim);letter-spacing:.02em;line-height:2.1}
+.sw{position:relative;flex:0 0 auto;width:34px;height:19px;padding:0;border-radius:10px;cursor:pointer;
+  background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.1);transition:background .2s,border-color .2s}
+.sw>i{position:absolute;top:2px;left:2px;width:13px;height:13px;border-radius:50%;background:rgba(230,238,250,.7);
+  transition:left .2s cubic-bezier(.3,1.3,.5,1),background .2s}
+.sw[aria-checked=true]{background:rgba(92,141,232,.85);border-color:rgba(150,188,255,.45)}
+.sw[aria-checked=true]>i{left:17px;background:#fff}
+
+/* ── 地标标注 ── */
+#labels{position:fixed;inset:0;pointer-events:none;overflow:hidden}
+.lbl{position:absolute;left:0;top:0;font-size:10px;letter-spacing:.08em;white-space:nowrap;opacity:0;
+  color:rgba(228,238,252,.9);text-shadow:0 0 8px rgba(0,0,0,.95),0 1px 2px rgba(0,0,0,.9);will-change:transform,opacity}
+.lbl::before{content:"";display:inline-block;width:3px;height:3px;margin-right:5px;border-radius:50%;vertical-align:1.5px;
+  background:rgba(190,215,255,.85);box-shadow:0 0 7px rgba(150,195,255,.7)}
+.lbl.earth{color:rgba(178,214,255,.95);font-size:11px}
+.lbl.earth::before{background:rgba(140,200,255,1);box-shadow:0 0 9px rgba(120,190,255,.9)}
+
+/* ── 载入 / 错误 ── */
+#loading{position:fixed;inset:0;z-index:50;background:#04060a;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;
+  transition:opacity .9s ease}
+#loading.done{opacity:0;pointer-events:none}
+#loading .t{font-size:13px;font-weight:600;letter-spacing:.34em;color:rgba(226,236,250,.9)}
+#loading .t em{font-style:normal;font-family:var(--mono);font-size:10px;letter-spacing:.3em;color:var(--accent);margin-left:9px}
+#loading .bar{width:196px;height:2px;border-radius:2px;background:rgba(255,255,255,.1);overflow:hidden}
+#loading .bar>i{display:block;height:100%;width:0;background:linear-gradient(90deg,#4f7fd8,#9dc0ff);transition:width .3s ease}
+#loading .s{font-size:10px;letter-spacing:.14em;color:var(--dim2);font-variant-numeric:tabular-nums}
+#fatal{position:fixed;inset:0;z-index:60;background:#04060a;display:none;align-items:center;justify-content:center;padding:30px;text-align:center;
+  font-size:12px;line-height:1.9;color:var(--dim)}
+#fatal.on{display:flex}
+#keyhint{position:fixed;left:50%;transform:translateX(-50%);bottom:6px;font-size:9.5px;letter-spacing:.06em;color:rgba(138,154,178,.32);pointer-events:none}
+@media (max-width:880px){#keyhint{display:none}}
+
+@media (max-width:1100px){
+  .panel-right{width:214px;padding:10px 10px 11px}
+  .btns button{font-size:10.5px;padding:7px 4px}
+  .card-title .meta{font-size:10px}
+}
+@media (max-width:880px){
+  .card-stats{display:none}
+  .card-title{padding:7px 11px 8px}
+  .card-title h1{font-size:13px;letter-spacing:.14em}
+  .card-title .meta{font-size:9.5px;margin-top:5px}
+  .panel-right{top:auto;bottom:8px;left:8px;right:8px;width:auto;max-height:42vh;
+    display:grid;grid-template-columns:1fr 1fr;gap:0 14px;align-items:start}
+  .sect+.sect{margin-top:0;padding-top:0;border-top:none}
+  .sect:first-child{grid-column:span 2}
+}
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="labels"></div>
+
+<section class="card card-title">
+  <h1>月球<span>LUNA</span></h1>
+  <div class="meta">
+    <div><b>半径</b>1737.4 km<i></i><b>反照率</b>0.07–0.25</div>
+    <div><b>地月距</b>384 400 km<i></i><b>太阳视径</b>0.53°</div>
+  </div>
+</section>
+
+<section class="card card-stats">
+  <h2>观测数据</h2>
+  <dl>
+    <div><dt>月面数据</dt><dd id="s-src">—</dd></div>
+    <div><dt>相机距月心</dt><dd id="s-dist">—</dd></div>
+    <div><dt>视场内分辨率</dt><dd id="s-res">—</dd></div>
+    <div><dt>相位角 α</dt><dd id="s-phase">—</dd></div>
+    <div><dt>本视角明亮比</dt><dd id="s-lit" class="hl">—</dd></div>
+    <div><dt>地球所见明亮比</dt><dd id="s-lite">—</dd></div>
+    <div><dt>日下点</dt><dd id="s-sub">—</dd></div>
+    <div><dt>真实起伏</dt><dd id="s-relief">—</dd></div>
+  </dl>
+  <p class="hint">拖拽旋转 · 滚轮缩放 · 双指缩放</p>
+</section>
+
+<aside class="panel-right">
+  <div class="sect">
+    <h3>视角</h3>
+    <div class="btns">
+      <button data-preset="default">默认视角</button>
+      <button data-preset="earth">定位地球</button>
+      <button data-preset="full">满月（α=0°）</button>
+      <button data-preset="quarter">上弦（α=90°）</button>
+      <button class="wide" data-preset="subsolar">贴近日下点 · 看地貌</button>
+      <button class="wide" data-preset="closeup">月面特写（约 600 km 高度）</button>
+    </div>
+  </div>
+
+  <div class="sect">
+    <h3>光照 · 相位</h3>
+    <label class="row" for="r-alpha"><span>太阳–地球夹角 α</span><b id="v-alpha">48.0°</b></label>
+    <input type="range" id="r-alpha" min="0" max="180" step="0.5" value="48">
+    <label class="row" for="r-exposure"><span>曝光</span><b id="v-exposure">2.6</b></label>
+    <input type="range" id="r-exposure" min="0.4" max="5" step="0.05" value="2.6">
+    <label class="row" for="r-earthshine"><span>地球反照（夜面补光）</span><b id="v-earthshine">0.045</b></label>
+    <input type="range" id="r-earthshine" min="0" max="0.3" step="0.005" value="0.045">
+    <label class="row" for="r-surge"><span>冲日增亮（后向散射）</span><b id="v-surge">0.45</b></label>
+    <input type="range" id="r-surge" min="0" max="1.5" step="0.01" value="0.45">
+  </div>
+
+  <div class="sect">
+    <h3>地貌</h3>
+    <label class="row" for="r-relief"><span>垂直夸张</span><b id="v-relief">1.0×</b></label>
+    <input type="range" id="r-relief" min="0" max="3" step="0.05" value="1">
+    <label class="row" for="r-dust"><span>月面微尘颗粒</span><b id="v-dust">0.22</b></label>
+    <input type="range" id="r-dust" min="0" max="1" step="0.01" value="0.22">
+    <div class="btns" style="margin-top:9px">
+      <button data-toggle="wire">线框地形</button>
+      <button data-toggle="grid">经纬网格</button>
+    </div>
+  </div>
+
+  <div class="sect">
+    <h3>场景</h3>
+    <div class="swrow"><span>星空</span><button class="sw" role="switch" aria-checked="true" data-toggle="stars"><i></i></button></div>
+    <div class="swrow"><span>地球</span><button class="sw" role="switch" aria-checked="true" data-toggle="earth"><i></i></button></div>
+    <div class="swrow"><span>地标标注</span><button class="sw" role="switch" aria-checked="true" data-toggle="labels"><i></i></button></div>
+    <div class="swrow"><span>相机自动环绕</span><button class="sw" role="switch" aria-checked="true" data-toggle="orbit"><i></i></button></div>
+    <div class="swrow"><span>月球自转（演示）</span><button class="sw" role="switch" aria-checked="false" data-toggle="spin"><i></i></button></div>
+  </div>
+</aside>
+
+<div id="loading">
+  <div class="t">月球<em>LUNA</em></div>
+  <div class="bar"><i id="lbar"></i></div>
+  <div class="s" id="ltext">正在生成月面地形…</div>
+</div>
+<div id="fatal"><div></div></div>
+<div id="keyhint">H 隐藏界面</div>
+
+<script>
+"use strict";
+/* =========================================================================
+   月球 LUNA · 观测器  —  单文件 / 零依赖 / WebGL2
+   月面地形（月海 · 撞击坑 · 辐射纹）全部程序化生成，无需任何外部贴图
+   ========================================================================= */
+
+/* ═══════════════════════════════ 0 · 基础工具 ═══════════════════════════════ */
+const DEG = Math.PI / 180, TAU = Math.PI * 2;
+const R_KM = 1737.4;                 // 月球半径 km
+const EARTH_R_RAD = 6371 / R_KM;     // 地球半径（月半径为单位）
+const EARTH_DIST = 384400 / R_KM;    // 地月距（月半径为单位）
+const SMALL = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
+              Math.min(screen.width, screen.height) < 760 || innerWidth < 900;
+let TEX_W = SMALL ? 4096 : 8192, TEX_H = TEX_W / 2;   // 程序化模式的尺寸；真实数据模式会被覆盖
+const PX_KM = TAU * R_KM / TEX_W;    // 每像素代表 km（赤道与子午线一致）
+const $ = s => document.querySelector(s);
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const sstep = (e0, e1, x) => { const t = clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); };
+const fmt = (v, d) => v.toFixed(d === undefined ? 1 : d).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+const raf = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+function mulberry32(a) {
+  return function () {
+    a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function hash2i(x, y, s) {
+  let n = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263) ^ Math.imul(s, 1274126177);
+  n = Math.imul(n ^ (n >>> 13), 1274126177); n ^= n >>> 16;
+  return (n >>> 0) / 4294967296;
+}
+function hash3i(x, y, z, s) {
+  let n = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263) ^ Math.imul(z | 0, 1440662683) ^ Math.imul(s, 1274126177);
+  n = Math.imul(n ^ (n >>> 13), 1274126177); n ^= n >>> 16;
+  return (n >>> 0) / 4294967296;
+}
+const sm = t => t * t * (3 - 2 * t);
+
+function noise3(x, y, z, s) {                       // 3D 值噪声（球面无缝）
+  const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z);
+  const u = sm(x - xi), v = sm(y - yi), w = sm(z - zi);
+  const c000 = hash3i(xi, yi, zi, s), c100 = hash3i(xi + 1, yi, zi, s);
+  const c010 = hash3i(xi, yi + 1, zi, s), c110 = hash3i(xi + 1, yi + 1, zi, s);
+  const c001 = hash3i(xi, yi, zi + 1, s), c101 = hash3i(xi + 1, yi, zi + 1, s);
+  const c011 = hash3i(xi, yi + 1, zi + 1, s), c111 = hash3i(xi + 1, yi + 1, zi + 1, s);
+  const x00 = c000 + (c100 - c000) * u, x10 = c010 + (c110 - c010) * u;
+  const x01 = c001 + (c101 - c001) * u, x11 = c011 + (c111 - c011) * u;
+  const y0 = x00 + (x10 - x00) * v, y1 = x01 + (x11 - x01) * v;
+  return y0 + (y1 - y0) * w;
+}
+function makeTile(N, L, seed) {                     // 可平铺梯度噪声瓦片（四周无缝，无格纹）
+  const t = new Float32Array(N * N), c = N / L;
+  const gx = new Float32Array(L * L), gy = new Float32Array(L * L);
+  for (let j = 0; j < L; j++) for (let i = 0; i < L; i++) {
+    const a = hash2i(i, j, seed) * TAU;
+    gx[j * L + i] = Math.cos(a); gy[j * L + i] = Math.sin(a);
+  }
+  for (let y = 0; y < N; y++) {
+    const fy = y / c, yi = Math.floor(fy), dy = fy - yi;
+    const Y0 = ((yi % L) + L) % L, Y1 = ((yi + 1) % L + L) % L;
+    const v = dy * dy * dy * (dy * (dy * 6 - 15) + 10);
+    const r0 = Y0 * L, r1 = Y1 * L;
+    for (let x = 0; x < N; x++) {
+      const fx = x / c, xi = Math.floor(fx), dx = fx - xi;
+      const X0 = ((xi % L) + L) % L, X1 = ((xi + 1) % L + L) % L;
+      const u = dx * dx * dx * (dx * (dx * 6 - 15) + 10);
+      const a = gx[r0 + X0] * dx + gy[r0 + X0] * dy;
+      const b = gx[r0 + X1] * (dx - 1) + gy[r0 + X1] * dy;
+      const cc = gx[r1 + X0] * dx + gy[r1 + X0] * (dy - 1);
+      const d = gx[r1 + X1] * (dx - 1) + gy[r1 + X1] * (dy - 1);
+      t[y * N + x] = (a + (b - a) * u) * (1 - v) + (cc + (d - cc) * u) * v;
+    }
+  }
+  return t;
+}
+function tileAt(t, N, x, y) {                       // 双线性取样（环绕）
+  const xi = Math.floor(x), yi = Math.floor(y);
+  const u = sm(x - xi), v = sm(y - yi);
+  const x0 = ((xi % N) + N) % N, x1 = ((xi + 1) % N + N) % N;
+  const y0 = ((yi % N) + N) % N, y1 = ((yi + 1) % N + N) % N;
+  const a = t[y0 * N + x0], b = t[y0 * N + x1], c = t[y1 * N + x0], d = t[y1 * N + x1];
+  return (a + (b - a) * u) * (1 - v) + (c + (d - c) * u) * v;
+}
+const uvOf = (latDeg, lonDeg) => [lonDeg * DEG / TAU + 0.5, 0.5 - latDeg * DEG / Math.PI];
+
+/* ═══════════════════════ 1 · 月面真实地理数据 ═══════════════════════ */
+// 月海（用若干圆盘拼出不规则轮廓）：[纬度, 经度, 半径 km]
+const MARIA = [
+  [22, -48, 430], [8, -58, 520], [30, -68, 400], [4, -42, 290], [35, -46, 300], [-2, -52, 320],   // 风暴洋
+  [33, -16, 560], [41, -22, 300], [24, -11, 260], [47, -13, 220],                              // 雨海
+  [28, 17, 340], [34, 21, 190],                                                                // 澄海
+  [8, 31, 430], [3, 24, 240], [15, 37, 250],                                                   // 静海
+  [17, 59, 270],                                                                               // 危海
+  [8, 52, 300], [12, 56, 210], [2, 47, 190],                                                   // 丰富海
+  [-15, 35, 200],                                                                              // 酒海
+  [-21, -16, 350], [-26, -22, 190],                                                            // 云海
+  [-24, -38, 205],                                                                             // 湿海
+  [13, 4, 150], [10, -23, 170], [3, 1, 150], [12, -8, 160], [45, -32, 190],                    // 汽海/知海/中央湾/暑湾/虹湾
+  [13, 86, 180], [57, 82, 230],                                                                // 界海/洪堡海
+  [27, 147, 190], [-34, 163, 150],                                                             // 莫斯科海/智海（月球背面）
+  [-53, -169, 560], [-45, -158, 380], [-58, -178, 300],                                        // 南极-艾特肯盆地
+  [-20, -95, 190],                                                                             // 东海（临边）
+  [45, 27, 110], [38, 29, 160], [23, 20, 90],                                                  // 死湖/梦湖/春湖
+];
+// 具名撞击坑：[纬度, 经度, 半径 km, 备注(新鲜度/暗底/中央峰/辐射纹强度)]
+const CRATERS = [
+  [-43.3, -11.4, 42.5, { fresh: 0.95, peak: 1, rays: 30, raysN: 150 }],   // 第谷
+  [9.6, -20.1, 46.5, { fresh: 0.8, peak: 1, rays: 12, raysN: 90 }],       // 哥白尼
+  [23.7, -47.4, 20.0, { fresh: 1.0, peak: 0.6, rays: 9, raysN: 70 }],     // 阿里斯塔克斯
+  [8.1, -38.0, 15.0, { fresh: 0.85, peak: 0.5, rays: 7, raysN: 50 }],     // 开普勒
+  [16.1, 46.8, 14.0, { fresh: 0.9, peak: 0.5, rays: 6, raysN: 40 }],      // 普罗克洛斯
+  [7.4, -77.9, 37.0, { fresh: 0.55, peak: 1 }],                           // 奥尔伯斯
+  [51.6, -9.3, 51.0, { darkFloor: 0.9, deg: 0.35 }],                      // 柏拉图
+  [29.7, -4.0, 41.5, { darkFloor: 0.85, deg: 0.3 }],                      // 阿基米德
+  [-5.4, -68.4, 86.0, { darkFloor: 1.0, deg: 0.45 }],                     // 格里马尔迪
+  [-20.4, 129.1, 92.0, { darkFloor: 1.0, deg: 0.4, peak: 1 }],            // 齐奥尔科夫斯基（背面）
+  [-58.4, -14.4, 115.0, { deg: 0.5, peak: 0.4 }],                         // 克拉维乌斯
+  [-66.5, -69.1, 150.0, { deg: 0.55, peak: 0.3 }],                        // 巴伊
+  [-44.3, -55.4, 106.0, { deg: 0.5, darkFloor: 0.35 }],                    // 谢克哈特
+  [-17.5, -39.9, 55.0, { deg: 0.3, peak: 1 }],                            // 伽桑狄
+  [-9.2, -1.8, 77.0, { deg: 0.4, darkFloor: 0.3 }],                       // 托勒密
+  [-13.4, -3.2, 60.0, { deg: 0.35, peak: 0.7 }],                          // 阿尔方斯
+  [-18.2, -1.9, 48.0, { deg: 0.3, peak: 0.8 }],                           // 阿尔扎赫尔
+  [-25.3, 60.4, 88.0, { deg: 0.35, peak: 0.8 }],                          // 佩塔维斯
+  [-11.4, 26.4, 50.0, { fresh: 0.5, peak: 1 }],                           // 西奥菲勒斯
+  [50.2, 17.4, 44.0, { deg: 0.35, peak: 0.6 }],                           // 亚里士多德
+  [44.3, 16.3, 33.0, { deg: 0.3, peak: 0.5 }],                            // 欧多克索斯
+  [14.5, -11.3, 29.0, { deg: 0.25, peak: 0.9 }],                          // 埃拉托色尼
+  [-27.0, 80.9, 103.0, { deg: 0.45, peak: 0.4 }],                         // 洪堡
+  [55.9, 22.4, 20.0, { fresh: 0.6, deg: 0.3 }],                           // 加勒
+  [-15.2, 34.6, 25.0, { deg: 0.3, peak: 0.6 }],                           // 塞奥菲卢斯群
+  [43.3, -8.5, 35.0, { deg: 0.4 }],                                       // 伊比利亚?（占位）
+];
+// 地标标注：[名称, 纬度, 经度]
+const LABELS = [
+  ['风暴洋', 18.4, -57.4], ['雨海', 32.8, -15.6], ['静海', 8.5, 31.4], ['澄海', 28.0, 17.5],
+  ['危海', 17.0, 59.1], ['丰富海', -7.8, 51.3], ['云海', -21.3, -16.6], ['湿海', -24.4, -38.6],
+  ['汽海', 13.3, 3.6], ['第谷坑', -43.3, -11.4], ['哥白尼坑', 9.6, -20.1], ['柏拉图坑', 51.6, -9.3],
+  ['阿里斯塔克斯坑', 23.7, -47.4], ['开普勒坑', 8.1, -38.0], ['亚平宁山脉', 18.9, -3.7],
+  ['克拉维乌斯坑', -58.4, -14.4], ['佩塔维斯坑', -25.3, 60.4], ['齐奥尔科夫斯基坑', -20.4, 129.1],
+  ['南极-艾特肯盆地', -53.0, -169.0], ['东海盆地', -20.0, -95.0],
+];
+
+/* ═══════════════════════ 2 · 月面地形 / 反照率生成 ═══════════════════════ */
+const A_SCALE = 65535;                                  // 反照率量化（Uint16）
+const A_MIN = 1180;                                     // 反照率下限 ≈ 0.018（避免出现纯黑斑）
+function addA(A, i, da) {
+  const v = A[i] + da * A_SCALE;
+  A[i] = v <= A_MIN ? A_MIN : (v >= A_SCALE ? A_SCALE : Math.round(v));
+}
+function addH(H, i, dkm) { H[i] = Math.round(H[i] + dkm * 1000); }   // 高度以米存 Int16
+
+function craterDepth(R) { return R < 8 ? 0.23 * R : Math.min(5.8, 2.05 * Math.sqrt(R / 8)); }
+const SHAPE = makeTile(512, 16, 77);          // 坑形不规则度（起伏轮廓 / 坑唇高低）
+
+/* 坑形剖面：宽平坑底 / 陡内壁（大坑带阶地）/ 锐利坑唇 / 溅射毯
+   asym 让坑唇高低不对称，nterr 为内壁阶地级数 */
+function craterLim(R) {          // 分辨率限制因子：小坑按比例削幅（防亚纹素尖峰）
+  return Math.min(1, Math.max(0.34, 0.11 * R / (1.5 * PX_KM)));
+}
+function craterProfile(t, R, deg, nterr, asym) {
+  if (t > 2.0) return 0;
+  const d = craterDepth(R) * (1 - 0.62 * deg) * craterLim(R);
+  const rim = (0.055 * R + 0.22) * (1 - 0.7 * deg) * asym * craterLim(R);
+  if (t < 0.84) return -d * (1 - 0.07 * (t / 0.84) * (t / 0.84));
+  if (t < 1.0) {
+    const s = (t - 0.84) / 0.16;
+    let e;
+    if (nterr > 1) {                                   // 阶地化内壁
+      const sn = s * nterr, fl = Math.floor(sn), fr = sn - fl;
+      const q = fr * fr * (3 - 2 * fr);
+      e = ((fl + q) / nterr) * 0.86 + (s * s * (3 - 2 * s)) * 0.14;
+    } else e = s * s * (3 - 2 * s);
+    return -d * 0.93 + (d * 0.93 + rim) * e;
+  }
+  if (t < 1.11) { const s = (t - 1.0) / 0.11, q = 1 - s; return rim * (0.62 + 0.76 * asym) * q * q * (0.55 + 0.45 * q); }
+  return -rim * 0.19 * (t - 1.11) / 0.89;
+}
+function craterAlbedo(t, o) {
+  if (t > 1.9) return 0;
+  let a = t < 0.92 ? -0.006 * (1 - t) : 0.008 * Math.exp(-Math.pow((t - 1.03) / o.sg, 2));
+  if (o.fresh) {
+    if (t < 1.0) a += o.fresh * 0.024 * (1 - 0.55 * t);
+    else if (t < 1.5) a += o.fresh * 0.055 * Math.exp(-Math.pow((t - 1.12) / o.sg2, 2));
+    else a += o.fresh * 0.013 * (1 - (t - 1.5) / 0.4);
+  }
+  if (o.darkFloor) a -= o.darkFloor * 0.034 * (1 - Math.min(1, t / 1.05));
+  if (o.darkHalo) a -= o.darkHalo * 0.026 * Math.exp(-Math.pow((t - 1.45) / 0.5, 2));
+  if (o.mareIn) a += 0.014 * (t < 1.05 ? 1 - 0.35 * t : Math.exp(-Math.pow((t - 1.15) / Math.max(0.4, o.sg3), 2)));
+  return a;
+}
+
+/* 撞击坑压印：地形 + 反照率（含中央峰群 / 阶地 / 坑唇不对称 / 溅射丘） */
+function stampCrater(H, A, lat, lon, R, o, MASK) {
+  const W = TEX_W, HT = TEX_H;
+  const [cu, cv] = uvOf(lat / DEG, lon / DEG);
+  const cosLat = Math.max(0.10, Math.cos(lat));
+  const cuPx = cu * W, cvPx = cv * HT;
+  const dxKm = PX_KM * cosLat, dyKm = PX_KM;
+  const rx = R / dxKm * 2.0, ry = R / dyKm * 2.0;
+  const x0 = Math.floor(cuPx - rx), x1 = Math.ceil(cuPx + rx);
+  const y0 = Math.max(0, Math.floor(cvPx - ry)), y1 = Math.min(HT - 1, Math.ceil(cvPx + ry));
+  const deg = o.deg === undefined ? 0.3 : o.deg;
+  const nterr = R > 22 ? Math.min(5, Math.max(2, Math.round(R / 26))) : 0;
+  const peak = o.peak || 0;
+  const rnd = mulberry32((Math.round(lat * 57287) * 31 + Math.round(lon * 57287)) ^ (R * 97 | 0));
+  const asx = (rnd() - 0.5) * 1.6, asy = (rnd() - 0.5) * 1.6;      // 坑唇不对称方向
+  const kwf = 28 / (Math.max(2.5, R) * 0.8);                        // 轮廓噪声频率（波长≈0.8R）
+  const dRef = craterDepth(R) * craterLim(R);
+  let p0x = 0, p0y = 0, p0w = 0, p0h = 0, p1x = 0, p1y = 0, p1w = 0, p1h = 0;
+  let p2x = 0, p2y = 0, p2w = 0, p2h = 0, hux = 0, huy = 0, huw = 0, huh = 0;
+  let hu2x = 0, hu2y = 0, hu2w = 0, hu2h = 0;
+  if (R > 14 && peak > 0) {                                          // 中央峰群
+    p0w = R * 0.20; p0h = 0.34;
+    p1x = (rnd() - 0.5) * 0.5 * R; p1y = (rnd() - 0.5) * 0.5 * R; p1w = R * 0.14; p1h = 0.17;
+    p2x = (rnd() - 0.5) * 0.5 * R; p2y = (rnd() - 0.5) * 0.5 * R; p2w = R * 0.12; p2h = 0.12;
+  }
+  if (R > 20) {                                                      // 溅射丘
+    const a1 = rnd() * TAU, r1 = R * (1.10 + 0.6 * rnd());
+    hux = Math.cos(a1) * r1; huy = Math.sin(a1) * r1; huw = R * (0.16 + 0.18 * rnd()); huh = 0.10 + 0.14 * rnd();
+    const a2 = rnd() * TAU, r2 = R * (1.10 + 0.6 * rnd());
+    hu2x = Math.cos(a2) * r2; hu2y = Math.sin(a2) * r2; hu2w = R * (0.14 + 0.16 * rnd()); hu2h = 0.08 + 0.12 * rnd();
+  }
+  const mareIn = MASK ? MASK[clamp(Math.round(cvPx), 0, HT - 1) * W + (((Math.round(cuPx) % W) + W) % W)] > 120 : false;
+  const ao2 = { fresh: o.fresh || 0, darkFloor: o.darkFloor || 0, darkHalo: o.darkHalo || 0, mareIn,
+    sg: Math.max(0.17, 2.2 / R), sg2: Math.max(0.26, 3.2 / R), sg3: Math.max(0.40, 4.0 / R) };
+  for (let y = y0; y <= y1; y++) {
+    const dy = (y - cvPx) * dyKm, row = y * W;
+    for (let x = x0; x <= x1; x++) {
+      const dx = (x - cuPx) * dxKm;
+      const rr = Math.sqrt(dx * dx + dy * dy);
+      const i = row + (((x % W) + W) % W);
+      // 轮廓不规则：半径与坑唇高度用同一噪声调制（隆起处也更高）
+      const nz = R > 2 ? tileAt(SHAPE, 512, dx * kwf, dy * kwf) : 0;
+      const t = rr / (R * (1 + 0.085 * nz));
+      if (t > 2.0) continue;
+      const asym = (1 + (R > 1.2 ? 0.30 * (dx * asx + dy * asy) / (rr + 1e-6) : 0)) * (1 + 0.75 * nz);
+      let dh = craterProfile(t, R, deg, nterr, asym);
+      if (R > 20) {                                                  // 溅射丘隆起
+        if (huw > 0) { const q = ((dx - hux) * (dx - hux) + (dy - huy) * (dy - huy)) / (huw * huw); if (q < 1) dh += dRef * huh * (1 - q); }
+        if (hu2w > 0) { const q = ((dx - hu2x) * (dx - hu2x) + (dy - hu2y) * (dy - hu2y)) / (hu2w * hu2w); if (q < 1) dh += dRef * hu2h * (1 - q); }
+      }
+      if (peak > 0) {
+        if (R > 14) {
+          if (t < 0.5) {
+            let q = (dx * dx + dy * dy) / (p0w * p0w); if (q < 1) dh += dRef * p0h * peak * (1 - q);
+            q = ((dx - p1x) * (dx - p1x) + (dy - p1y) * (dy - p1y)) / (p1w * p1w); if (q < 1) dh += dRef * p1h * peak * (1 - q);
+            q = ((dx - p2x) * (dx - p2x) + (dy - p2y) * (dy - p2y)) / (p2w * p2w); if (q < 1) dh += dRef * p2h * peak * (1 - q);
+          }
+        } else if (t < 0.24) {
+          dh += dRef * 0.34 * peak * (1 - (t / 0.24) * (t / 0.24));
+        }
+      }
+      if (dh !== 0) addH(H, i, dh);
+      const da = craterAlbedo(t, ao2);
+      if (da !== 0) addA(A, i, da);
+    }
+  }
+}
+
+/* 软斑（辐射纹用） */
+function blot(A, lat, lon, rKm, amp) {
+  const W = TEX_W, HT = TEX_H;
+  const [cu, cv] = uvOf(lat / DEG, lon / DEG);
+  const cosLat = Math.max(0.10, Math.cos(lat));
+  const cuPx = cu * W, cvPx = cv * HT;
+  const rx = rKm / (PX_KM * cosLat) * 1.6, ry = rKm / PX_KM * 1.6;
+  const x0 = Math.floor(cuPx - rx), x1 = Math.ceil(cuPx + rx);
+  const y0 = Math.max(0, Math.floor(cvPx - ry)), y1 = Math.min(HT - 1, Math.ceil(cvPx + ry));
+  for (let y = y0; y <= y1; y++) {
+    const dy = (y - cvPx) * PX_KM / rKm, row = y * W;
+    for (let x = x0; x <= x1; x++) {
+      const dx = (x - cuPx) * PX_KM * cosLat / rKm;
+      const q = dx * dx + dy * dy;
+      if (q > 2.6) continue;
+      addA(A, row + (((x % W) + W) % W), amp * Math.exp(-q * 1.6));
+    }
+  }
+}
+/* 沿任意方向的椭圆印（皱脊 / 月溪 / 直壁） */
+function stampEllipse(H, A, lat, lon, rAlong, rAcross, ang, ampKm, kind, seed) {
+  const W = TEX_W, HT = TEX_H;
+  const [cu, cv] = uvOf(lat / DEG, lon / DEG);
+  const cosLat = Math.max(0.10, Math.cos(lat));
+  const cuPx = cu * W, cvPx = cv * HT;
+  const dxKm = PX_KM * cosLat, dyKm = PX_KM;
+  const sa = Math.sin(ang), ca = Math.cos(ang);
+  const rx = (Math.abs(sa) * rAlong + Math.abs(ca) * rAcross) / dxKm + 1;
+  const ry = (Math.abs(ca) * rAlong + Math.abs(sa) * rAcross) / dyKm + 1;
+  const x0 = Math.floor(cuPx - rx), x1 = Math.ceil(cuPx + rx);
+  const y0 = Math.max(0, Math.floor(cvPx - ry)), y1 = Math.min(HT - 1, Math.ceil(cvPx + ry));
+  for (let y = y0; y <= y1; y++) {
+    const dy = (y - cvPx) * dyKm, row = y * W;
+    for (let x = x0; x <= x1; x++) {
+      const dx = (x - cuPx) * dxKm;
+      const xa = dx * sa + dy * ca, ya = dx * ca - dy * sa;
+      const r = Math.sqrt((xa / rAlong) * (xa / rAlong) + (ya / rAcross) * (ya / rAcross));
+      if (r > 2.2) continue;
+      const i = row + (((x % W) + W) % W);
+      let h = 0;
+      if (kind === 0) {                       // 皱脊：宽阔拱起 + 一侧陡坎
+        h = ampKm * (0.55 * Math.exp(-r * r * 1.1) + 0.5 * Math.exp(-Math.pow(r - 1.0, 2) * 3.2));
+      } else if (kind === 1) {                // 月溪：细窄沟槽 + 微弱抬升的唇
+        h = ampKm * (-1.25 * Math.exp(-r * r * 2.4) + 0.30 * Math.exp(-Math.pow((r - 1.25) / 0.45, 2)));
+      } else if (kind === 3) {                // 辐射纹条带：只改反照率、平滑连续
+        addA(A, i, ampKm * Math.exp(-r * r * 1.05));
+        continue;
+      } else {                                // 直壁型断层：一侧陡降
+        const s = sstep(-0.15, 0.25, ya / rAcross);
+        h = ampKm * (0.5 - s);
+      }
+      addH(H, i, h);
+      if (kind === 0) addA(A, i, 0.007 * Math.exp(-r * r * 1.3));
+      else if (kind === 1) addA(A, i, -0.005 * Math.exp(-r * r * 1.6));
+    }
+  }
+}
+function greatCircle(lat, lon, az, ang) {
+  const cl = Math.cos(lat), sl = Math.sin(lat);
+  const ca = Math.cos(ang), sa = Math.sin(ang);
+  const sl2 = sl * ca + cl * sa * Math.cos(az);
+  const lat2 = Math.asin(clamp(sl2, -1, 1));
+  const lon2 = lon + Math.atan2(Math.sin(az) * sa * cl, ca - sl * sl2);
+  return [lat2, lon2];
+}
+/* 胶囊印：沿线段的中点，按到线段的真实距离成图
+   —— 取代"圆斑串联"，辐射纹/皱脊/月溪沿线连续无缝，不再出现珠串或虚线 */
+function stampChain(H, A, pts, kind) {
+  const W = TEX_W, HT = TEX_H;
+  for (let k = 0; k + 1 < pts.length; k++) {
+    const p0 = pts[k], p1 = pts[k + 1];
+    const latM = (p0.lat + p1.lat) / 2, lonM = (p0.lon + p1.lon) / 2;
+    const cosLat = Math.max(0.10, Math.cos(latM));
+    const [cu, cv] = uvOf(latM / DEG, lonM / DEG);
+    const cuPx = cu * W, cvPx = cv * HT;
+    const dxKm = PX_KM * cosLat, dyKm = PX_KM;
+    let dLon = p1.lon - p0.lon;
+    if (dLon > Math.PI) dLon -= TAU; else if (dLon < -Math.PI) dLon += TAU;
+    const bx = dLon * DEG * R_KM * cosLat, by = (p1.lat - p0.lat) * DEG * R_KM;
+    const bl2 = bx * bx + by * by || 1e-9;
+    const wMax = Math.max(p0.w, p1.w);
+    const rx = (Math.abs(bx) * 0.5 + wMax * 2.4) / dxKm + 1;
+    const ry = (Math.abs(by) * 0.5 + wMax * 2.4) / dyKm + 1;
+    const x0 = Math.floor(cuPx - rx), x1 = Math.ceil(cuPx + rx);
+    const y0 = Math.max(0, Math.floor(cvPx - ry)), y1 = Math.min(HT - 1, Math.ceil(cvPx + ry));
+    for (let y = y0; y <= y1; y++) {
+      const py = (y - cvPx) * dyKm - by * 0.5, row = y * W;
+      for (let x = x0; x <= x1; x++) {
+        const px = (x - cuPx) * dxKm - bx * 0.5;
+        let t = (px * bx + py * by) / bl2;
+        t = t < 0 ? 0 : (t > 1 ? 1 : t);
+        const qx = px - bx * t, qy = py - by * t;
+        const dist = Math.sqrt(qx * qx + qy * qy);
+        const w = p0.w + (p1.w - p0.w) * t;
+        const amp = p0.amp + (p1.amp - p0.amp) * t;
+        const d = dist / w;
+        if (d > 2.4) continue;
+        const i = row + (((x % W) + W) % W);
+        if (kind === 0) {                    // 月海皱脊：宽拱 + 一侧陡坎
+          addH(H, i, amp * (0.60 * Math.exp(-d * d / 0.25) + 0.55 * Math.exp(-Math.pow((d - 1.1) / 0.55, 2))));
+          addA(A, i, amp * 0.055 * Math.exp(-d * d / 0.5));
+        } else if (kind === 1) {             // 月溪：细窄沟槽 + 微唇
+          addH(H, i, amp * (-1.25 * Math.exp(-d * d / 0.25) + 0.30 * Math.exp(-Math.pow((d - 1.35) / 0.5, 2))));
+          addA(A, i, -amp * 0.030 * Math.exp(-d * d / 0.4));
+        } else if (kind === 3) {             // 辐射纹：只改反照率
+          addA(A, i, amp * Math.exp(-d * d));
+        } else {                             // 断层崖：一侧陡降
+          const s = sstep(-0.25, 0.35, qy / w);
+          addH(H, i, amp * (0.5 - s) * Math.exp(-d * d * 0.35));
+        }
+      }
+    }
+  }
+}
+/* 按大圆路径生成一条链（辐射纹 / 皱脊 / 月溪） */
+function makeChain(lat, lon, az0, lenKm, w0, w1, amp0, amp1, kind, rnd) {
+  const step = Math.max(w0 * 1.6, kind === 3 ? 6 : 9);
+  const n = Math.max(2, Math.ceil(lenKm / step));
+  const pts = [];
+  let la = lat, lo = lon, az = az0;
+  for (let k = 0; k <= n; k++) {
+    const f = k / n;
+    pts.push({
+      lat: la, lon: lo,
+      w: w0 + (w1 - w0) * f,
+      amp: (amp0 + (amp1 - amp0) * f) * (0.85 + 0.30 * rnd()),
+    });
+    const p = greatCircle(la, lo, az, step / R_KM);
+    la = p[0]; lo = p[1];
+    az += (rnd() - 0.5) * (kind === 3 ? 0.10 : 0.34);
+  }
+  return pts;
+}
+
+/* 辐射纹：连续细纹 + 沿纹次生坑链（真实辐射纹的招牌特征） */
+function stampRays(H, A, lat, lon, R, lenR, n, seed) {
+  const rnd = mulberry32(seed);
+  for (let k = 0; k < n; k++) {
+    const az = rnd() * TAU;
+    const len = R * lenR * (0.30 + 0.70 * rnd());
+    const w0 = R * (0.045 + 0.13 * rnd());
+    const bright = (0.060 + 0.090 * rnd()) * (0.45 + 0.55 * rnd());
+    const pts = makeChain(lat, lon, az, len, w0, w0 * 3.2, bright, bright * 0.05, 3, rnd);
+    // 起点避开坑体本身
+    pts.splice(0, Math.max(1, Math.round(pts.length * (R * 1.1 / len))));
+    stampChain(H, A, pts, 3);
+    // 次生坑链
+    let la = lat, lo = lon, azc = az;
+    const stp = Math.max(w0 * 2.2, 8);
+    for (let d = R * 1.6; d < len * 0.85; d += stp) {
+      azc += (rnd() - 0.5) * 0.10;
+      const q = greatCircle(la, lo, azc, stp / R_KM);
+      la = q[0]; lo = q[1];
+      if (rnd() < 0.30) {
+        const off = (rnd() - 0.5) * w0 * 5.0;
+        const r2 = greatCircle(la, lo, azc + Math.PI / 2, off / R_KM);
+        stampCrater(H, A, r2[0], r2[1], R * (0.012 + 0.055 * rnd()),
+          { deg: 0.02 + 0.25 * rnd(), fresh: 0.5 + 0.5 * rnd() }, null);
+      }
+    }
+  }
+}
+/* 蜿蜒皱脊 / 月溪 */
+function stampSinuous(H, A, lat, lon, dirAz, lenKm, widthKm, ampKm, kind, seed) {
+  const rnd = mulberry32(seed);
+  const pts = makeChain(lat, lon, dirAz, lenKm, widthKm, widthKm * 1.5, ampKm, ampKm * 0.5, kind, rnd);
+  stampChain(H, A, pts, kind);
+}
+
+/* 生成月面（分阶段，可显示进度） */
+async function buildMoon(step) {
+  const T0 = performance.now();
+  const W = TEX_W, HT = TEX_H, N = W * HT;
+  const T0m = performance.now();
+  const H = new Int16Array(N);        // 地形起伏（米）
+  const A = new Uint16Array(N);       // 反照率（0..65535）
+  const MASK = new Uint8Array(N);     // 月海遮罩
+  step(3, '铺展月海…');
+
+  /* ── 1：月海遮罩 ── */
+  {
+    const EDGE = makeTile(256, 8, 91);
+    for (let k = 0; k < MARIA.length; k++) {
+      const latD = MARIA[k][0], lonD = MARIA[k][1], rKm = MARIA[k][2];
+      const [cu, cv] = uvOf(latD, lonD);
+      const cosLat = Math.max(0.10, Math.cos(latD * DEG));
+      const cuPx = cu * W, cvPx = cv * HT;
+      const dxKm = PX_KM * cosLat, dyKm = PX_KM;
+      const rx = rKm / dxKm * 1.5, ry = rKm / dyKm * 1.5;
+      const x0 = Math.floor(cuPx - rx), x1 = Math.ceil(cuPx + rx);
+      const y0 = Math.max(0, Math.floor(cvPx - ry)), y1 = Math.min(HT - 1, Math.ceil(cvPx + ry));
+      for (let y = y0; y <= y1; y++) {
+        const dy = (y - cvPx) * dyKm, row = y * W;
+        for (let x = x0; x <= x1; x++) {
+          const dx = (x - cuPx) * dxKm;
+          const r = Math.sqrt(dx * dx + dy * dy) / rKm;
+          if (r > 1.5) continue;
+          const nz = tileAt(EDGE, 256, x / W * 26, y / HT * 26);
+          const m = 1 - sstep(0.82, 1.02 + 0.30 * nz, r);
+          const i = row + (((x % W) + W) % W);
+          const v = m * 255;
+          if (v > MASK[i]) MASK[i] = v;
+        }
+      }
+    }
+  }
+  await raf();
+
+  /* ── 2：反照率底图（月海暗、高地亮 + 斑驳）——必须早于撞击坑，坑的明暗在其上累加 ── */
+  step(12, '调制反照率…');
+  {
+    const m1 = makeTile(512, 16, 29), m2 = makeTile(512, 16, 37);
+    for (let y = 0; y < HT; y++) {
+      const v = y / HT, row = y * W;
+      const y1 = v * 26, y2 = v * 90;
+      for (let x = 0; x < W; x++) {
+        const i = row + x, m = MASK[i] * (1 / 255), u = x / W;
+        const base = 0.232 - 0.128 * m;
+        const mot = tileAt(m1, 512, u * 26, y1) * 0.030 + tileAt(m2, 512, u * 90, y2) * 0.014;
+        A[i] = Math.round((base + mot * (0.45 + 0.55 * (1 - m))) * A_SCALE);
+      }
+    }
+  }
+  await raf();
+
+  /* ── 3：大尺度地形（半分辨率计算再上采样，8192 下省一半时间） ── */
+  step(22, '生成基础地形…');
+  const BW = 512, BH = 256, LW = W >> 1, LH = HT >> 1;
+  const base = new Float32Array(BW * BH);
+  for (let y = 0; y < BH; y++) {
+    const lat = (0.5 - (y + 0.5) / BH) * Math.PI;
+    const cl = Math.cos(lat), sl = Math.sin(lat);
+    for (let x = 0; x < BW; x++) {
+      const lon = ((x + 0.5) / BW - 0.5) * TAU;
+      const dx = cl * Math.sin(lon), dz = cl * Math.cos(lon);
+      let acc = 0, amp = 1, f = 1.5, sum = 0;
+      for (let o = 0; o < 5; o++) {
+        acc += amp * (noise3(dx * f + 11.3, sl * f + 4.7, dz * f + 21.1, 7) - 0.5) * 2;
+        sum += amp; amp *= 0.5; f *= 2.07;
+      }
+      base[y * BW + x] = acc / sum;
+    }
+  }
+  const low = new Float32Array(LW * LH);
+  {
+    const t1 = makeTile(512, 16, 3), t2 = makeTile(512, 16, 5);
+    const t3 = makeTile(512, 16, 11), t4 = makeTile(512, 16, 17);
+    const rx = [8, 20, 50, 120], ry = [4, 10, 25, 60], am = [0.42, 0.23, 0.12, 0.062];
+    for (let y = 0; y < LH; y++) {
+      const fy = y / LH;
+      // 基础球面噪声双线性
+      const gy = fy * BH - 0.5, yi = Math.floor(gy), vy = gy - yi;
+      const y0 = clamp(yi, 0, BH - 1), yc1 = clamp(yi + 1, 0, BH - 1);
+      const row = y * LW;
+      const v1 = fy * ry[0], v2 = fy * ry[1], v3 = fy * ry[2], v4 = fy * ry[3];
+      for (let x = 0; x < LW; x++) {
+        const fx = x / LW;
+        const gx = fx * BW - 0.5, xi = Math.floor(gx), ux = gx - xi;
+        const xa = ((xi % BW) + BW) % BW, xb = ((xi + 1) % BW + BW) % BW;
+        const b0 = base[y0 * BW + xa], b1 = base[y0 * BW + xb];
+        const b2 = base[yc1 * BW + xa], b3 = base[yc1 * BW + xb];
+        const bv = (b0 + (b1 - b0) * ux) * (1 - vy) + (b2 + (b3 - b2) * ux) * vy;
+        const mm = MASK[Math.min(HT - 1, (y * 2) | 0) * W + ((((x * 2) | 0) % W) + W) % W] * (1 / 255);
+        const s = tileAt(t1, 512, fx * rx[0], v1) * am[0] + tileAt(t2, 512, fx * rx[1], v2) * am[1]
+                + tileAt(t3, 512, fx * rx[2], v3) * am[2] + tileAt(t4, 512, fx * rx[3], v4) * am[3];
+        low[row + x] = bv * 3.1 + s * (0.20 + 0.80 * (1 - mm)) - mm * 1.45;
+      }
+    }
+  }
+  await raf();
+
+  /* ── 4：上采样到全分辨率 + 最细一层粗糙度 ── */
+  step(36, '雕刻高地起伏…');
+  {
+    const tf = makeTile(512, 16, 23);
+    for (let y = 0; y < HT; y++) {
+      const gy = y * 0.5, yi = Math.min(LH - 2, Math.floor(gy)), vy = gy - yi;
+      const y0 = yi, y1 = yi + 1;
+      const vf = y / HT * 260;
+      const row = y * W;
+      for (let x = 0; x < W; x++) {
+        const q = x * 0.5 - 0.5 + 0.5;
+        const xi = Math.floor(q), ux = q - xi;
+        const x0 = ((xi % LW) + LW) % LW, x1 = ((xi + 1) % LW + LW) % LW;
+        const l0 = low[y0 * LW + x0], l1 = low[y0 * LW + x1];
+        const l2 = low[y1 * LW + x0], l3 = low[y1 * LW + x1];
+        const lv = (l0 + (l1 - l0) * ux) * (1 - vy) + (l2 + (l3 - l2) * ux) * vy;
+        const m = MASK[row + x] * (1 / 255);
+        const fine = tileAt(tf, 512, x / W * 260, vf) * 0.018 * (0.18 + 0.82 * (1 - m));
+        H[row + x] = Math.round((lv + fine) * 1000);
+      }
+    }
+  }
+  await raf();
+
+  /* ── 5：随机撞击坑（尺寸-频率幂律，月海内大坑显著减少） ── */
+  step(48, '累计撞击坑…');
+  {
+    const rnd = mulberry32(20240923);
+    const NCR = SMALL ? 14000 : 26000;
+    for (let k = 0; k < NCR; k++) {
+      const u = Math.max(1e-6, rnd());
+      const R = 5.0 * Math.pow(u, -0.60);
+      if (R > 260) continue;
+      const lat = Math.asin(2 * rnd() - 1) * 0.97;
+      const lon = (rnd() - 0.5) * TAU;
+      if (Math.abs(lat) > 1.48) continue;
+      let deg0 = 0.10;
+      const mi = Math.round((0.5 - lat / Math.PI) * HT) * W + (((Math.round((lon / TAU + 0.5) * W)) % W) + W) % W;
+      const inMare = MASK[mi] > 120;
+      const fr = rnd();
+      if (inMare && R > 26 && rnd() > 0.25) continue;        // 月海年轻，大坑稀少
+      if (inMare && R < 9 && rnd() > 0.55) continue;         // 小坑也明显偏少
+      if (inMare && R < 14) deg0 += 0.28;                    // 且被玄武岩淹没得更浅
+      stampCrater(H, A, lat, lon, R, {
+        deg: clamp(deg0 + 0.6 * rnd(), 0, 1),
+        fresh: Math.pow(fr, 12) * 0.9,
+        darkHalo: inMare && R < 14 && rnd() < 0.22 ? 0.7 + 0.5 * rnd() : 0,
+        peak: R > 11 ? Math.pow(rnd(), 1.5) : 0,
+      }, MASK);
+    }
+  }
+  await raf();
+
+  /* ── 6：具名大坑 + 辐射纹（含次生坑链） ── */
+  step(70, '塑造著名环形山…');
+  for (const c of CRATERS) {
+    const latD = c[0], lonD = c[1], rKm = c[2], o = c[3];
+    stampCrater(H, A, latD * DEG, lonD * DEG, rKm, o, MASK);
+    if (o.rays) stampRays(H, A, latD * DEG, lonD * DEG, rKm, o.rays, o.raysN, 1234 + (rKm | 0));
+  }
+  await raf();
+
+  /* ── 7：月海皱脊 / 月溪 / 直壁 ── */
+  step(84, '刻画月海纹理…');
+  {
+    const rnd = mulberry32(4242);
+    for (let k = 0; k < MARIA.length; k++) {
+      const latD = MARIA[k][0], lonD = MARIA[k][1], rKm = MARIA[k][2];
+      if (rKm < 150) continue;
+      const n = clamp(Math.round(rKm / 190), 1, 4);
+      for (let j = 0; j < n; j++) {
+        const a0 = rnd() * TAU, d0 = rKm * (0.10 + 0.55 * rnd());
+        const p = greatCircle(latD * DEG, lonD * DEG, a0, d0 / R_KM);
+        const kind = rnd() < 0.72 ? 0 : 1;                    // 多为皱脊，少量月溪
+        stampSinuous(H, A, p[0], p[1], rnd() * TAU, rKm * (0.5 + 0.8 * rnd()),
+          kind === 0 ? rKm * 0.022 + 2.2 : rKm * 0.008 + 1.1,
+          kind === 0 ? 0.11 + 0.13 * rnd() : 0.16 + 0.20 * rnd(), kind, 900 + k * 7 + j);
+      }
+    }
+    // 直壁（Rupes Recta）：月面最著名的断层崖（一公里级陡坎）
+    {
+      const p = greatCircle(-24.5 * DEG, -9.5 * DEG, 47 * DEG, 62 / R_KM);
+      stampChain(H, A, [
+        { lat: -24.5 * DEG, lon: -9.5 * DEG, w: 2.6, amp: 0.42 },
+        { lat: p[0], lon: p[1], w: 1.7, amp: 0.30 },
+      ], 2);
+      const q = greatCircle(-25.2 * DEG, -10.6 * DEG, 45 * DEG, 44 / R_KM);
+      stampChain(H, A, [
+        { lat: -25.2 * DEG, lon: -10.6 * DEG, w: 2.0, amp: 0.34 },
+        { lat: q[0], lon: q[1], w: 1.4, amp: 0.22 },
+      ], 2);
+    }
+  }
+  await raf();
+
+  /* ── 8：烘焙环境光遮蔽（坑底变暗、坑唇提亮 → 立体感） ── */
+  step(92, '烘焙光影遮蔽…');
+  {
+    const AX = W >> 2, AY = HT >> 2;                          // 1/4 分辨率的模糊高程
+    const bl = new Float32Array(AX * AY), tmp = new Float32Array(AX * AY);
+    const xb = new Int32Array(AX * 4);
+    for (let y = 0; y < AY; y++) {
+      const y0 = y * 4;
+      for (let k = 0; k < 4; k++) { const yy = Math.min(HT - 1, y0 + k); for (let x = 0; x < AX; x++) xb[x * 4 + k] = yy * W + ((x * 4 + k) % W); }
+      for (let x = 0; x < AX; x++) {
+        let s = 0;
+        for (let k = 0; k < 4; k++) { const i0 = xb[x * 4 + k]; s += H[i0] + H[i0 + 1] + H[i0 + 2] + H[i0 + 3]; }
+        bl[y * AX + x] = s / 16;                     // 完整 4×4 盒式平均，杜绝混叠
+      }
+    }
+    const R = 6;                                              // 盒式模糊（≈ 48 px 全分辨率 ≈ 64 km）
+    for (let y = 0; y < AY; y++) {
+      const row = y * AX;
+      for (let x = 0; x < AX; x++) {
+        let s = 0, c = 0;
+        for (let k = -R; k <= R; k++) { const xx = ((x + k) % AX + AX) % AX; s += bl[row + xx]; c++; }
+        tmp[row + x] = s / c;
+      }
+    }
+    for (let x = 0; x < AX; x++) {
+      for (let y = 0; y < AY; y++) {
+        let s = 0, c = 0;
+        for (let k = -R; k <= R; k++) { const yy = clamp(y + k, 0, AY - 1); s += tmp[yy * AX + x]; c++; }
+        bl[y * AX + x] = s / c;
+      }
+    }
+    const RANG = 900;                                         // 相对半径 900 m 内映射到 0..1
+    for (let y = 0; y < HT; y++) {
+      const gy = y * 0.25 - 0.5, yi = Math.max(0, Math.floor(gy)), vy = gy - yi;
+      const y0 = Math.min(AY - 1, yi), y1 = Math.min(AY - 1, yi + 1);
+      const row = y * W;
+      for (let x = 0; x < W; x++) {
+        const q = x * 0.25 - 0.5, xi = Math.floor(q), ux = q - xi;
+        const x0 = ((xi % AX) + AX) % AX, x1 = ((xi + 1) % AX + AX) % AX;
+        const b0 = bl[y0 * AX + x0], b1 = bl[y0 * AX + x1];
+        const b2 = bl[y1 * AX + x0], b3 = bl[y1 * AX + x1];
+        const bv = (b0 + (b1 - b0) * ux) * (1 - vy) + (b2 + (b3 - b2) * ux) * vy;
+        const i = row + x;
+        const ao = clamp(0.5 + (H[i] - bv) / (2 * RANG), 0, 1);
+        A[i] = Math.round(A[i] * (0.905 + 0.115 * ao));
+      }
+    }
+  }
+  await raf();
+
+  /* ── 9：打包 ── */
+  step(96, '上传纹理…');
+  let hMin = 1e9, hMax = -1e9;
+  for (let i = 0; i < N; i++) { const h = H[i]; if (h < hMin) hMin = h; if (h > hMax) hMax = h; }
+  hMin /= 1000; hMax /= 1000;
+  const range = Math.max(0.5, hMax - hMin);
+  const mid = (hMin + hMax) / 2, kk = 26.0 / range;            // 归一到真实月球量级起伏
+  hMin = -13; hMax = 13;
+  const h8 = new Uint8Array(N * 2);                            // 高度：RG8 打包 16bit
+  const a8 = new Uint8Array(N * 2);                            // 反照率：RG8 打包 16bit
+  const bx = [new Float32Array(W), new Float32Array(W), new Float32Array(W)];
+  const hrow = (yy, out) => {                                  // 取出某行并做水平 [1,2,1]
+    const off = yy * W;
+    for (let x = 0; x < W; x++) {
+      const xm = (x + W - 1) % W, xp = (x + 1) % W;
+      out[x] = (H[off + xm] + 2 * H[off + x] + H[off + xp]) * 0.25;
+    }
+  };
+  hrow(0, bx[0]); hrow(0, bx[1]);
+  for (let y = 0; y < HT; y++) {
+    const A0 = bx[0], B0 = bx[1], C0 = bx[2];
+    hrow(y + 1 < HT ? y + 1 : HT - 1, C0);
+    const row = y * W;
+    for (let x = 0; x < W; x++) {
+      const hv = (A0[x] + 2 * B0[x] + C0[x]) * 0.25;            // 垂直 [1,2,1] → 等效 [1,2,1]²
+      const q = Math.round(clamp((hv / 1000 - mid) * kk / 26 + 0.5, 0, 1) * 65535);
+      h8[row * 2 + x * 2] = q >> 8; h8[row * 2 + x * 2 + 1] = q & 255;
+      const av = A[row + x];
+      a8[(row + x) * 2] = av >> 8; a8[(row + x) * 2 + 1] = av & 255;
+    }
+    bx[0] = B0; bx[1] = C0; bx[2] = A0;                         // 三行滚动
+  }
+  await raf();
+  console.log('[luna] 月面纹理 ' + W + 'x' + HT + '，用时 ' + Math.round(performance.now() - T0) + ' ms');
+  return { h8, a8, hMin, hMax, W, HT, aw: W, ah: HT, src: '程序化生成' };
+}
+
+/* 月壤细节图：多尺度粗糙 + 稀疏微坑 → 存坡度(RG) 与反照率颗粒(B)；平铺无缝、可 mipmap
+   坡度按"每纹素斜率"标定到 ±1.2 以内，128 为中性，避免 8 位饱和 */
+function buildDetail() {
+  const N = 512, h = new Float32Array(N * N);
+  const t1 = makeTile(N, 256, 211), t2 = makeTile(N, 68, 223), t3 = makeTile(N, 22, 227);
+  const alb = new Float32Array(N * N);
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const i = y * N + x;
+    h[i] = t2[i] * 1.05 + t3[i] * 3.10 + t1[i] * 0.14;
+    alb[i] = t1[i] * 0.60 + t2[i] * 0.50;
+  }
+  const rnd = mulberry32(9091);
+  for (let k = 0; k < 150; k++) {                    // 稀疏微坑，尺寸跨度大
+    const cx = rnd() * N, cy = rnd() * N, R = 3 + 11 * Math.pow(rnd(), 1.7);
+    const dep = R * (0.10 + 0.07 * rnd()), rim = R * (0.03 + 0.04 * rnd());
+    const x0 = Math.floor(cx - R * 2.2), x1 = Math.ceil(cx + R * 2.2);
+    const y0 = Math.floor(cy - R * 2.2), y1 = Math.ceil(cy + R * 2.2);
+    for (let y = y0; y <= y1; y++) {
+      const dy = y - cy, yy = ((y % N) + N) % N;
+      for (let x = x0; x <= x1; x++) {
+        const dx = x - cx;
+        const t = Math.sqrt(dx * dx + dy * dy) / R;
+        if (t > 2.0) continue;
+        const xx = ((x % N) + N) % N, ii = yy * N + xx;
+        let dh;
+        if (t < 0.82) dh = -dep * (1 - 0.10 * (t / 0.82) * (t / 0.82));
+        else if (t < 1.0) { const q = (t - 0.82) / 0.18, e = q * q * (3 - 2 * q); dh = -dep * 0.9 + (dep * 0.9 + rim) * e; }
+        else dh = rim * Math.exp(-Math.pow((t - 1.12) / 0.55, 2));
+        h[ii] += dh;
+        alb[ii] += t < 0.85 ? -0.16 : 0.22 * Math.exp(-Math.pow((t - 1.05) / 0.35, 2));
+      }
+    }
+  }
+  const d = new Uint8Array(N * N * 4);
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const i = y * N + x;
+    const xm = (x + N - 1) % N, xp = (x + 1) % N, ym = (y + N - 1) % N, yp = (y + 1) % N;
+    const sx = (h[y * N + xp] - h[y * N + xm]) * 0.5;       // 每纹素斜率
+    const sy = (h[yp * N + x] - h[ym * N + x]) * 0.5;
+    const o = i * 4;
+    d[o] = clamp(128 + sx * 96, 0, 255);
+    d[o + 1] = clamp(128 + sy * 96, 0, 255);
+    d[o + 2] = clamp(128 + (alb[i] - 0.5) * 150, 0, 255);
+    d[o + 3] = 255;
+  }
+  return { data: d, W: N, HT: N };
+}
+
+/* ═══════════════════════ 3 · 地球贴图 ═══════════════════════ */
+function buildEarth() {
+  const W = 1024, HT = 512, d = new Uint8Array(W * HT * 4);
+  const c1 = makeTile(512, 16, 61), c2 = makeTile(512, 16, 71);
+  for (let y = 0; y < HT; y++) {
+    const lat = (0.5 - (y + 0.5) / HT) * Math.PI;
+    const cl = Math.cos(lat), sl = Math.sin(lat);
+    const clat = Math.abs(lat) / DEG;
+    for (let x = 0; x < W; x++) {
+      const lon = ((x + 0.5) / W - 0.5) * TAU;
+      const u = (x + 0.5) / W, v = (y + 0.5) / HT;
+      const dx = cl * Math.sin(lon), dz = cl * Math.cos(lon);
+      // 大陆：球面 3D 噪声阈值
+      let land = 0, amp = 1, f = 2.2, sum = 0;
+      for (let o = 0; o < 5; o++) {
+        land += amp * noise3(dx * f + 5.1, sl * f + 9.3, dz * f + 2.7, 43);
+        sum += amp; amp *= 0.55; f *= 2.1;
+      }
+      land = (land / sum - 0.47) * 2.6;
+      const ice = sstep(62, 74, clat) * (0.7 + 0.3 * tileAt(c1, 512, u * 12, v * 12));
+      let r, g, b;
+      if (land > 0) {                                        // 陆地
+        const alt = clamp(land, 0, 1);
+        r = 0.28 + 0.24 * alt; g = 0.34 + 0.16 * alt; b = 0.18 + 0.10 * alt;
+        const desert = sstep(0.25, 0.06, Math.abs(Math.abs(lat) / DEG - 24));
+        r += desert * 0.16; g += desert * 0.10; b -= desert * 0.04;
+      } else {                                               // 海洋
+        const dpt = clamp(-land, 0, 1);
+        r = 0.03 + 0.07 * dpt; g = 0.10 + 0.16 * dpt; b = 0.32 + 0.22 * dpt;
+      }
+      // 云
+      const cv = tileAt(c2, 512, u * 14, v * 14);
+      const cloud = sstep(-0.04, 0.26, cv * 0.75 + 0.25 * tileAt(c1, 512, u * 26, v * 26));
+      r = r + (0.92 - r) * cloud; g = g + (0.94 - g) * cloud; b = b + (0.97 - b) * cloud;
+      r = r + (0.95 - r) * ice; g = g + (0.96 - g) * ice; b = b + (0.99 - b) * ice;
+      const i = (y * W + x) * 4;
+      d[i] = r * 255; d[i + 1] = g * 255; d[i + 2] = b * 255; d[i + 3] = 255;
+    }
+  }
+  return { data: d, W, HT };
+}
+
+/* 真实月面数据（LRO LOLA 高程 + LROC WAC 反照率，见 _dev/build_real_data.py）
+   以 fetch 读取同目录 data/；用 file:// 直接打开会因浏览器 CORS 限制失败，此时自动回退程序化生成 */
+async function tryLoadReal(step) {
+  try {
+    step(4, '载入真实月面数据…');
+    const meta = await (await fetch('data/meta.json', { cache: 'force-cache' })).json();
+    const hb = await (await fetch('data/moon_h.bin', { cache: 'force-cache' })).arrayBuffer();
+    const ab = await (await fetch('data/moon_a.bin', { cache: 'force-cache' })).arrayBuffer();
+    if (hb.byteLength !== meta.w * meta.h * 2 || ab.byteLength !== meta.aw * meta.ah * 2) throw new Error('尺寸不符');
+    console.log('[luna] 真实数据模式：' + meta.src + '  高程 ' + meta.w + '×' + meta.h + '，反照率 ' + meta.aw + '×' + meta.ah);
+    return { h8: new Uint8Array(hb), a8: new Uint8Array(ab), hMin: meta.hMin, hMax: meta.hMax,
+             W: meta.w, HT: meta.h, aw: meta.aw, ah: meta.ah, src: meta.src, detGain: 0.6 };
+  } catch (e) {
+    console.log('[luna] 未找到 data/（' + (e && e.message) + '），改程序化生成');
+    return null;
+  }
+}
+
+/* ═══════════════════════ 4 · GL 初始化与着色器 ═══════════════════════ */
+const VS = '#version 300 es\nin vec2 aPos;out vec2 vUv;void main(){vUv=aPos*0.5+0.5;gl_Position=vec4(aPos,0.0,1.0);}';
+
+const FS = [
+'#version 300 es',
+'precision highp float;',
+'in vec2 vUv;',
+'out vec4 outColor;',
+'uniform float uTanHalf,uAspect,uTime,uFade,uHMin,uHRange;',
+'uniform vec3 uCam,uRight,uUp,uFwd,uSun,uEarthPos;',
+'uniform mat3 uB2W,uW2B;',
+'uniform sampler2D uH,uA,uE,uD;',
+'uniform vec2 uADec;',
+'uniform vec2 uTexSize;',
+'uniform float uExposure,uEarthshine,uSurge,uRelief,uDust;',
+'uniform float uStars,uEarth,uWire,uGrid,uWireStep,uGridStep,uPxAng,uDetGain;',
+'const float PI=3.141592653589793;',
+'const float DEG=0.017453292519943295;',
+'const float R_KM=1737.4;',
+'const float EARTH_R=' + EARTH_R_RAD.toFixed(4) + ';',
+'float hkmL(vec2 uv,float lod){return uHMin+dot(textureLod(uH,uv,lod).rg,vec2(0.996109,0.003891))*uHRange;}',
+'vec3 albedoAt(vec2 uv){float a=dot(texture(uA,uv).rg,uADec);float w=smoothstep(0.10,0.19,a);return a*mix(vec3(0.962,0.985,1.035),vec3(1.032,1.0,0.962),w);}',
+'vec2 d2uv(vec3 d){return vec2(atan(d.x,d.z)/(2.0*PI)+0.5,0.5-asin(clamp(d.y,-1.0,1.0))/PI);}',
+'float hash13(vec3 p){p=fract(p*0.1031);p+=dot(p,p.yzx+33.33);return fract((p.x+p.y)*p.z);}',
+'float vn(vec3 x){vec3 i=floor(x),f=fract(x);f=f*f*(3.0-2.0*f);',
+'  return mix(mix(mix(hash13(i),hash13(i+vec3(1,0,0)),f.x),mix(hash13(i+vec3(0,1,0)),hash13(i+vec3(1,1,0)),f.x),f.y),',
+'             mix(mix(hash13(i+vec3(0,0,1)),hash13(i+vec3(1,0,1)),f.x),mix(hash13(i+vec3(0,1,1)),hash13(i+vec3(1,1,1)),f.x),f.y),f.z);}',
+'float hash21(vec2 p){p=fract(p*vec2(123.34,456.21));p+=dot(p,p+45.32);return fract(p.x*p.y);}',
+'const float KLAT=30.32;',
+// 微坑场：4 级抖动网格，每坑解析求梯度（一个坑只需一次哈希组）
+// acc = vec4(高度km, 东向坡度, 北向坡度, 反照率微扰)
+'void microField(float latDeg,float lonDeg,float cosLat,float footKm,float lod,inout vec4 acc){',
+'  for(int L=0;L<5;L++){',
+'    float cellDeg=1.90,dens=0.30;',
+'    if(L==1){cellDeg=0.70;dens=0.40;}',
+'    else if(L==2){cellDeg=0.26;dens=0.50;}',
+'    else if(L==3){cellDeg=0.10;dens=0.55;}',
+'    else if(L==4){cellDeg=0.038;dens=0.55;}',
+'    float cellKm=cellDeg*KLAT;',
+'    float seed=31.7+float(L)*57.3;',
+'    vec2 g=vec2(lonDeg,latDeg)/cellDeg;',
+'    vec2 c0=floor(g-0.5);',
+'    for(int j=0;j<2;j++){for(int i=0;i<2;i++){',
+'      vec2 cc=mod(c0+vec2(float(i),float(j)),1024.0);',
+'      vec2 hs=cc+seed;',
+'      if(hash21(hs)>dens)continue;',
+'      vec2 ctr=cc+vec2(0.38+hash21(hs+3.1)*0.24,0.38+hash21(hs+7.7)*0.24);',
+'      float rkm=(0.06+0.12*hash21(hs+11.3))*cellKm;',
+'      float fg=1.0-smoothstep(0.45,1.4,footKm/rkm);',
+'      float fa=1.0-smoothstep(0.20,0.75,footKm/rkm);',
+'      if(fa<=0.001&&fg<=0.001)continue;',
+'      vec2 dkm=vec2((g.x-ctr.x)*cellKm*cosLat,(g.y-ctr.y)*cellKm);',
+'      float d=length(dkm)/rkm;',
+'      if(d>1.9)continue;',
+'      float amp=rkm*0.34*lod*fg;',
+'      if(d>0.04&&fg>0.001){',
+'        float hp=(d<1.0)?1.10*d:-0.14*exp(-pow((d-1.05)/0.42,2.0))*2.0*(d-1.05)/0.1764;',
+'        acc.yz+=dkm*(amp*hp/(rkm*rkm*d));',
+'      }',
+'      acc.w+=(d<0.9?-0.012:0.016*exp(-pow((d-1.05)/0.33,2.0)))*fa*(0.35+0.9*hash21(hs+19.9));',
+'    }}',
+'  }',
+'}',
+// ── 星空（立方体面网格 + 抖动星点） ──
+'float starLayer(vec3 rd,float sc,float prob,float sz,float br,float pxr){',
+'  vec3 a=abs(rd);',
+'  float m=max(a.x,max(a.y,a.z));',
+'  vec2 uv; float face;',
+'  if(a.x>=m){uv=rd.yz/a.x;face=rd.x>0.0?0.0:1.0;}',
+'  else if(a.y>=m){uv=rd.xz/a.y;face=rd.y>0.0?2.0:3.0;}',
+'  else {uv=rd.xy/a.z;face=rd.z>0.0?4.0:5.0;}',
+'  vec2 g=uv*sc; vec2 i=floor(g),f=fract(g);',
+'  float h=hash21(i+face*37.1);',
+'  if(h>prob) return 0.0;',
+'  vec2 sp=vec2(hash21(i+1.37),hash21(i+7.71));',
+'  float d=length(f-sp);',
+'  float r=max(sz*(0.45+0.9*hash21(i+3.19)), 0.55*sc*pxr);',
+'  float core=exp(-(d*d)/(r*r));',
+'  float amp=br*pow(hash21(i+9.93),3.0);',
+'  return core*amp;}',
+'vec3 starfield(vec3 rd,float pxr){',
+'  vec3 c=vec3(0.0);',
+'  float a=starLayer(rd,190.0,0.16,0.055,0.60,pxr);',
+'  float b=starLayer(rd,74.0,0.07,0.035,6.50,pxr);',
+'  vec3 tint=vec3(0.78,0.86,1.0);',
+'  c+=vec3(0.86,0.92,1.0)*a*1.2+vec3(1.0,0.92,0.80)*b*0.5+tint*b*0.6;',
+'  c+=vec3(0.9,0.95,1.0)*starLayer(rd,330.0,0.12,0.06,0.26,pxr);',
+'  return c*0.10;}',
+// ── 月球着色 ──
+'vec3 shadeMoon(vec3 P,vec3 rd,vec3 Ngeo,vec3 uvOut){',
+'  vec3 Pb=uW2B*Ngeo;',
+'  vec2 uv=d2uv(Pb);',
+'  float lat=(0.5-uv.y)*PI, lon=(uv.x-0.5)*2.0*PI;',
+'  float cl=cos(lat), sl=sin(lat), so=sin(lon), co=cos(lon);',
+'  vec3 T=vec3(co,0.0,-so);',
+'  vec3 B=vec3(-sl*so,cl,-sl*co);',
+'  float eT=clamp(length(dFdx(P)),1e-6,0.030);',
+'  float eB=clamp(length(dFdy(P)),1e-6,0.030);',
+'  vec3 alb=albedoAt(uv);',
+'  vec2 duvx=dFdx(uv), duvy=dFdy(uv);',
+'  float lodH=log2(max(max(length(vec2(duvx.x*uTexSize.x,duvx.y*uTexSize.y)),length(vec2(duvy.x*uTexSize.x,duvy.y*uTexSize.y))),0.001));',
+'  float hT1=hkmL(d2uv(normalize(Pb+T*eT)),lodH),hT0=hkmL(d2uv(normalize(Pb-T*eT)),lodH);',
+'  float hB1=hkmL(d2uv(normalize(Pb+B*eB)),lodH),hB0=hkmL(d2uv(normalize(Pb-B*eB)),lodH);',
+'  float sT=(hT1-hT0)/(2.0*eT*R_KM), sB=(hB1-hB0)/(2.0*eB*R_KM);',
+// 微尘颗粒（程序化，随像素足迹淡出，避免远距闪烁）
+'  float foot=0.5*(eT+eB)*R_KM;',
+'  vec3 f2rot=vec3(dot(Pb,vec3(0.36,0.80,-0.48)),dot(Pb,vec3(-0.80,0.53,0.28)),dot(Pb,vec3(0.48,0.28,0.83)));',
+'  if(uDust>0.01){',
+'    vec4 mAcc=vec4(0.0);',
+'    microField(lat/DEG,lon/DEG,cl,foot,uDust*4.5*uDetGain,mAcc);',
+'    sT+=mAcc.y; sB+=mAcc.z;',
+'    alb*=1.0+mAcc.w;',
+    // 月壤细节：三级平铺法线（尺度约 50/130/390 km），mipmap 自动抗混叠、远距自然平均
+'    vec4 dA=texture(uD,vec2(uv.x*220.0,uv.y*110.0));',
+'    vec4 dB=texture(uD,vec2(uv.x*84.0,uv.y*42.0)+vec2(0.31,0.17));',
+'    vec4 dC=texture(uD,vec2(uv.x*30.0,uv.y*15.0)+vec2(0.63,0.44));',
+'    vec2 gA=vec2(dA.r,dA.g)-0.5, gB=vec2(dB.r,dB.g)-0.5, gC=vec2(dC.r,dC.g)-0.5;',
+'    gB=mat2(0.80,0.60,-0.60,0.80)*gB;',
+'    gC=mat2(0.17,0.98,-0.98,0.17)*gC;',
+'    vec2 gDet=(gA*0.85+gB*0.75+gC*0.60)*uDust*3.2*uDetGain;',
+'    sT+=gDet.x; sB+=gDet.y;',
+'    alb*=1.0+uDust*0.55*((dA.b-0.5)+(dB.b-0.5)*0.75+(dC.b-0.5)*0.55)*uDetGain;',
+'  }',
+'  vec3 Nts=normalize(vec3(-sT*uRelief,-sB*uRelief,1.0));',
+'  vec3 N=normalize(uB2W*(T*Nts.x+B*Nts.y+Ngeo*Nts.z));',
+'  vec3 L=uSun, V=-rd;',
+'  float mu0=max(dot(N,L),0.0), mu=max(dot(N,V),1e-4);',
+'  float ls=mix(1.0,2.0*mu0/(mu0+mu),0.70);',
+'  float opp=1.0+uSurge*pow(max(dot(V,L),0.0),10.0);',
+'  vec3 rad=alb*(ls*mu0*opp)*vec3(1.0,0.984,0.962);',
+'  vec3 Le=normalize(uEarthPos);',
+'  rad+=alb*uEarthshine*0.52*max(dot(Ngeo,Le),0.0)*vec3(0.55,0.74,1.06);',
+'  rad+=alb*0.028*vec3(0.62,0.73,1.0);',
+// 线框地形
+'  if(uWire>0.5){',
+'    vec2 gg=vec2(lat/DEG/uWireStep,lon/DEG/uWireStep);',
+'    vec2 w=fwidth(gg)*0.55;',
+'    vec2 dd=abs(fract(gg+0.5)-0.5);',
+'    vec2 mm=vec2(1.0)-smoothstep(vec2(0.0),max(w,vec2(1e-6)),dd);',
+'    float line=max(mm.x,mm.y);',
+'    float fade=1.0-smoothstep(0.22,0.48,max(w.x,w.y));',
+'    float lit=smoothstep(0.0,0.42,mu0);',
+'    rad*=0.18;',
+'    rad=mix(rad,vec3(0.042,0.052,0.072)*(0.35+0.80*lit),line*fade*0.92);',
+'  }',
+// 经纬网格
+'  if(uGrid>0.5){',
+'    vec2 gg=vec2(lat/DEG/uGridStep,lon/DEG/uGridStep);',
+'    vec2 w=fwidth(gg)*0.55;',
+'    vec2 dd=abs(fract(gg+0.5)-0.5);',
+'    vec2 mm=vec2(1.0)-smoothstep(vec2(0.0),max(w,vec2(1e-6)),dd);',
+'    float line=max(mm.x,mm.y);',
+'    float fade=(1.0-smoothstep(0.2,0.45,max(w.x,w.y)))*smoothstep(0.02,0.22,dot(Ngeo,V));',
+'    rad=mix(rad,vec3(0.30,0.48,0.78)*0.55+rad*0.40,line*fade*0.85);',
+'  }',
+'  return rad;}',
+'float lsf(float a,float b){return 2.0*a/(a+b);}',
+'vec3 shadeEarth(vec3 P,vec3 rd,vec3 N){',
+'  vec2 uv=d2uv(N);',
+'  vec3 alb=texture(uE,uv).rgb;',
+'  float mu0=max(dot(N,uSun),0.0), mu=max(dot(N,-rd),0.0);',
+'  vec3 rad=alb*(0.30+0.70*lsf(mu0,mu+1e-4))*mu0*0.34*vec3(1.0,0.99,0.97);',
+'  float rim=pow(1.0-max(dot(N,-rd),0.0),3.0);',
+'  rad+=vec3(0.16,0.34,0.75)*rim*0.45*mu0;',
+'  return rad;}',
+'void main(){',
+'  vec2 ndc=vUv*2.0-1.0;',
+'  vec3 rd=normalize(uRight*(ndc.x*uTanHalf*uAspect)+uUp*(ndc.y*uTanHalf)+uFwd);',
+'  float pxr=uPxAng;',
+'  vec3 col=vec3(0.0);',
+'  if(uStars>0.5) col=starfield(rd,pxr);',
+// 地球
+'  bool eHit=false; float eT=1e9; float eCov=0.0; vec3 eCol=vec3(0.0);',
+'  if(uEarth>0.5){',
+'    vec3 oc=uCam-uEarthPos;',
+'    float b=dot(rd,oc), c=dot(oc,oc)-EARTH_R*EARTH_R, disc=b*b-c;',
+'    if(disc>0.0){float t=-b-sqrt(disc);',
+'      if(t>0.0){eHit=true;eT=t;eCov=smoothstep(-fwidth(disc),fwidth(disc),disc);',
+'        eCol=shadeEarth(uCam+rd*t,rd,normalize(uCam+rd*t-uEarthPos));}}}',
+// 月球
+'  vec3 oc=uCam;',
+'  float b=dot(rd,oc), c=dot(oc,oc)-1.0, disc=b*b-c;',
+'  bool mHit=false; float mT=1e9; float mCov=0.0; vec3 mCol=vec3(0.0);',
+'  if(disc>0.0){float t=-b-sqrt(disc);',
+'    if(t>0.0){mHit=true;mT=t;mCov=smoothstep(-fwidth(disc),fwidth(disc),disc);',
+'      mCol=shadeMoon(uCam+rd*t,rd,normalize(uCam+rd*t),vec3(0.0));}}',
+'  if(eHit&&(!mHit||eT<mT)) col=mix(col,eCol,eCov);',
+'  if(mHit) col=mix(col,mCol,mCov*(eHit&&eT<mT?1.0-eCov:1.0));',
+'  if(eHit&&mHit&&eT>mT) col=mix(col,eCol,eCov*(1.0-mCov));',
+// 曝光 + 色调映射 + 抖动
+'  col*=uExposure*1.20;',
+'  col=vec3(1.0)-exp(-max(col,vec3(0.0)));',
+'  col=pow(col,vec3(1.0/2.2));',
+'  float dth=(hash21(gl_FragCoord.xy*1.7)-0.5)/255.0;',
+'  col+=vec3(dth);',
+'  outColor=vec4(col*uFade,1.0);}',
+].join('\n');
+
+/* ═══════════════════════ 5 · GL 上下文 · 程序 · 纹理 ═══════════════════════ */
+const canvas = $('#gl');
+let gl = null;
+try {
+  gl = canvas.getContext('webgl2', { antialias: false, alpha: false, depth: false, stencil: false, powerPreference: 'high-performance' });
+} catch (e) { /* 下面统一报错 */ }
+
+function fatal(msg) {
+  const f = $('#fatal');
+  f.firstElementChild.innerHTML = msg;
+  f.classList.add('on');
+  $('#loading').classList.add('done');
+}
+if (!gl) {
+  fatal('本页需要 <b>WebGL2</b> 支持<br><span style="opacity:.6">请使用较新版本的 Chrome / Edge / Safari / Firefox 打开</span>');
+}
+
+function compile(type, src) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error('着色器编译失败: ' + gl.getShaderInfoLog(s));
+  return s;
+}
+let prog = null, U = {}, aniso = null;
+function initGL() {
+  prog = gl.createProgram();
+  gl.attachShader(prog, compile(gl.VERTEX_SHADER, VS));
+  gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FS));
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error('着色器链接失败：' + gl.getProgramInfoLog(prog));
+  gl.useProgram(prog);
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+  const aPos = gl.getAttribLocation(prog, 'aPos');
+  gl.enableVertexAttribArray(aPos);
+  gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+  ['uTanHalf', 'uAspect', 'uTime', 'uFade', 'uHMin', 'uHRange', 'uCam', 'uRight', 'uUp', 'uFwd', 'uSun', 'uEarthPos',
+   'uB2W', 'uW2B', 'uH', 'uA', 'uE', 'uExposure', 'uEarthshine', 'uSurge', 'uRelief', 'uDust',
+   'uStars', 'uEarth', 'uWire', 'uGrid', 'uWireStep', 'uGridStep', 'uPxAng', 'uADec', 'uTexSize', 'uD', 'uDetGain'].forEach(n => U[n] = gl.getUniformLocation(prog, n));
+  aniso = gl.getExtension('EXT_texture_filter_anisotropic') || gl.getExtension('WEBKIT_EXT_texture_filter_anisotropic');
+}
+
+/* ═══════════════════════ 6 · 状态 · 相机 ═══════════════════════ */
+const TILT = 1.54 * DEG;                       // 月球自转轴相对黄道的倾角
+const S = {
+  yaw: 0, pitch: 6 * DEG, dist: 7.0, alpha: 48,
+  exposure: 2.6, earthshine: 0.045, surge: 0.45, relief: 1.0, dust: 0.22,
+  stars: true, earth: true, labels: true, orbit: true, spin: false,
+  wire: false, grid: false, spinPhase: 0,
+  off: [0, 0, 0], velYaw: 0, velPitch: 0,
+};
+let H_MIN = -10, H_MAX = 10, hTex = null, aTex = null, eTex = null, dTex = null, ready = false, ADEC = [1, 0];
+let DATA_SRC = '程序化生成', DET_GAIN = 1.0;
+
+const sunDir = () => [Math.sin(S.alpha * DEG), 0, Math.cos(S.alpha * DEG)];
+function bodyMats() {                          // B2W = RotX(TILT)·RotY(spin)，列主序
+  const cs = Math.cos(S.spinPhase), sn = Math.sin(S.spinPhase);
+  const ct = Math.cos(TILT), st = Math.sin(TILT);
+  const m = [cs, 0, sn, st * sn, ct, -st * cs, -ct * sn, st, ct * cs];   // 行主序
+  const b2w = new Float32Array([m[0], m[3], m[6], m[1], m[4], m[7], m[2], m[5], m[8]]);
+  const w2b = new Float32Array([m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8]]);   // 转置
+  return [b2w, w2b];
+}
+const bodyToWorld = v => {
+  const [b2w] = bodyMats();
+  return [
+    b2w[0] * v[0] + b2w[3] * v[1] + b2w[6] * v[2],
+    b2w[1] * v[0] + b2w[4] * v[1] + b2w[7] * v[2],
+    b2w[2] * v[0] + b2w[5] * v[1] + b2w[8] * v[2],
+  ];
+};
+const uvToDir = (latDeg, lonDeg) => {
+  const la = latDeg * DEG, lo = lonDeg * DEG, cl = Math.cos(la);
+  return [cl * Math.sin(lo), Math.sin(la), cl * Math.cos(lo)];
+};
+function camVectors() {
+  const cp = Math.cos(S.pitch), sp = Math.sin(S.pitch);
+  const pos = [Math.sin(S.yaw) * cp * S.dist + S.off[0], sp * S.dist + S.off[1], Math.cos(S.yaw) * cp * S.dist + S.off[2]];
+  let f = [S.off[0] - pos[0], S.off[1] - pos[1], S.off[2] - pos[2]];
+  const nf = Math.hypot(f[0], f[1], f[2]) || 1;
+  f = [f[0] / nf, f[1] / nf, f[2] / nf];
+  let r = [f[1] * 0 - f[2] * 1, f[2] * 0 - f[0] * 0, f[0] * 1 - f[1] * 0];   // cross(f, up)
+  const nr = Math.hypot(r[0], r[1], r[2]) || 1;
+  r = [r[0] / nr, r[1] / nr, r[2] / nr];
+  const u = [r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0]];  // cross(r,f)
+  return { pos, f, r, u };
+}
+const FOV = 35 * DEG;
+const TAN_HALF = Math.tan(FOV / 2);
+
+/* ═══════════════════════ 7 · 视角预设 · 补间 ═══════════════════════ */
+let anim = null;
+const EASE = t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+function flyTo(t, dur) {
+  const from = { yaw: S.yaw, pitch: S.pitch, dist: S.dist, alpha: S.alpha, off: S.off.slice() };
+  const to = Object.assign({}, from, t);
+  if (t.yaw !== undefined) {                    // 取最短旋转方向
+    let d = t.yaw - S.yaw;
+    while (d > Math.PI) d -= TAU;
+    while (d < -Math.PI) d += TAU;
+    to.yaw = S.yaw + d;
+  }
+  anim = { from, to, t0: performance.now(), dur: dur || 1500 };
+}
+const surfacePoint = (latDeg, lonDeg, r) => {
+  const v = uvToDir(latDeg, lonDeg);
+  return [v[0] * (r || 1), v[1] * (r || 1), v[2] * (r || 1)];
+};
+// 由「机位 + 注视点」反解轨道参数（可拍带地平线的斜视）
+function aim(camPos, lookAt) {
+  const o = lookAt || [0, 0, 0];
+  const d = [camPos[0] - o[0], camPos[1] - o[1], camPos[2] - o[2]];
+  const dist = Math.hypot(d[0], d[1], d[2]) || 1;
+  return { yaw: Math.atan2(d[0], d[2]), pitch: Math.asin(clamp(d[1] / dist, -1, 1)), dist, off: o };
+}
+const PRESETS = {
+  'default': () => flyTo({ yaw: 0, pitch: 6 * DEG, dist: 7.0, alpha: 48, off: [0, 0, 0] }, 1600),
+  'earth': () => flyTo({ yaw: 197 * DEG, pitch: 14 * DEG, dist: 6.4, off: [0, 0, 0] }, 1700),
+  'full': () => flyTo({ alpha: 0, yaw: 0, pitch: 6 * DEG, dist: 7.0, off: [0, 0, 0] }, 1300),
+  'quarter': () => flyTo({ alpha: 90, yaw: -34 * DEG, pitch: 12 * DEG, dist: 7.0, off: [0, 0, 0] }, 1300),
+  // 贴近日下点：约 1200 km 高度，斜视晨昏线，能看见地平线与明暗分界
+  'subsolar': () => flyTo(aim(surfacePoint(10, S.alpha - 62, 1.70), surfacePoint(-4, S.alpha - 100, 0.62)), 1900),
+  // 月面特写：600 km 高度俯拍晨昏线附近的坑原（太阳高度约 10°）
+  'closeup': () => flyTo(aim(surfacePoint(-30, S.alpha - 77, 1.3454), [0, 0, 0]), 2000),
+};
+
+/* ═══════════════════════ 8 · 交互 ═══════════════════════ */
+const ptrs = new Map();
+let lastX = 0, lastY = 0, pinchD = 0;
+canvas.addEventListener('pointerdown', e => {
+  canvas.setPointerCapture(e.pointerId);
+  ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  canvas.classList.add('dragging');
+  anim = null; S.velYaw = S.velPitch = 0;
+  if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinchD = Math.hypot(a.x - b.x, a.y - b.y); }
+});
+canvas.addEventListener('pointermove', e => {
+  const p = ptrs.get(e.pointerId);
+  if (!p) return;
+  const dx = e.clientX - p.x, dy = e.clientY - p.y;
+  p.x = e.clientX; p.y = e.clientY;
+  if (ptrs.size === 1) {
+    const k = 0.0042 * (S.pitch > 1.45 ? 0.35 : 1);
+    S.yaw -= dx * 0.0042;
+    S.pitch = clamp(S.pitch + dy * k, -1.5533, 1.5533);
+    S.velYaw = -dx * 0.0042 * 0.55; S.velPitch = dy * k * 0.55;
+  } else if (ptrs.size >= 2) {
+    const [a, b] = [...ptrs.values()];
+    const d = Math.hypot(a.x - b.x, a.y - b.y);
+    if (pinchD > 0) zoom(Math.pow(pinchD / d, 1.4));
+    pinchD = d;
+  }
+});
+const endPtr = e => {
+  ptrs.delete(e.pointerId);
+  if (!ptrs.size) { canvas.classList.remove('dragging'); pinchD = 0; }
+};
+canvas.addEventListener('pointerup', endPtr);
+canvas.addEventListener('pointercancel', endPtr);
+function zoom(f) { S.dist = clamp(S.dist * f, 1.021, 520); }
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  zoom(Math.exp(clamp(e.deltaY, -120, 120) * 0.0011));
+}, { passive: false });
+// 双击回到默认视角
+canvas.addEventListener('dblclick', () => PRESETS['default']());
+addEventListener('keydown', e => {
+  if (e.key === 'h' || e.key === 'H') document.body.classList.toggle('hide-ui');
+});
+
+/* ═══════════════════════ 9 · 界面绑定 ═══════════════════════ */
+function bindRange(id, vid, key, fmtFn) {
+  const el = $('#' + id), lbl = $('#' + vid);
+  const upd = () => { S[key] = parseFloat(el.value); lbl.textContent = fmtFn(S[key]); };
+  el.addEventListener('input', upd); upd();
+  return {
+    set(v, quiet) {
+      S[key] = v; el.value = v; lbl.textContent = fmtFn(v);
+      if (!quiet) el.dispatchEvent(new Event('input'));
+    }
+  };
+}
+const R_ALPHA = bindRange('r-alpha', 'v-alpha', 'alpha', v => v.toFixed(1) + '°');
+const R_EXP = bindRange('r-exposure', 'v-exposure', 'exposure', v => v.toFixed(2));
+const R_ESH = bindRange('r-earthshine', 'v-earthshine', 'earthshine', v => v.toFixed(3));
+const R_SRG = bindRange('r-surge', 'v-surge', 'surge', v => v.toFixed(2));
+const R_RLF = bindRange('r-relief', 'v-relief', 'relief', v => v.toFixed(2) + '×');
+const R_DST = bindRange('r-dust', 'v-dust', 'dust', v => v.toFixed(2));
+const SLIDERS = { alpha: R_ALPHA, exposure: R_EXP, earthshine: R_ESH, surge: R_SRG, relief: R_RLF, dust: R_DST };
+
+document.querySelectorAll('[data-preset]').forEach(b => b.addEventListener('click', () => PRESETS[b.dataset.preset]()));
+document.querySelectorAll('[data-toggle]').forEach(b => {
+  const key = b.dataset.toggle;
+  const paint = () => {
+    if (b.classList.contains('sw')) b.setAttribute('aria-checked', S[key] ? 'true' : 'false');
+    else b.classList.toggle('on', !!S[key]);
+  };
+  b.addEventListener('click', () => { S[key] = !S[key]; paint(); });
+  paint();
+});
+
+/* ═══════════════════════ 10 · 地标标注 ═══════════════════════ */
+const labelWrap = $('#labels');
+const labelItems = [];
+for (const [name, lat, lon] of LABELS) {
+  const el = document.createElement('div');
+  el.className = 'lbl';
+  el.textContent = name;
+  labelWrap.appendChild(el);
+  labelItems.push({ el, dir: uvToDir(lat, lon), earth: false });
+}
+{
+  const el = document.createElement('div');
+  el.className = 'lbl earth';
+  el.textContent = '地球 EARTH';
+  labelWrap.appendChild(el);
+  labelItems.push({ el, dir: null, earth: true });
+}
+function updateLabels() {
+  const { pos, f, r, u } = camVectors();
+  const W = canvas.clientWidth, H = canvas.clientHeight;
+  const EARTH_POS = [0, 0, EARTH_DIST];
+  for (const it of labelItems) {
+    let P, vis;
+    if (it.earth) {
+      if (!S.earth) { it.el.style.opacity = 0; continue; }
+      P = EARTH_POS;
+      // 是否被月球遮挡
+      const oc = [-pos[0], -pos[1], -pos[2]];
+      const dv = [P[0] - pos[0], P[1] - pos[1], P[2] - pos[2]];
+      const len = Math.hypot(dv[0], dv[1], dv[2]);
+      const L = [dv[0] / len, dv[1] / len, dv[2] / len];
+      const b = L[0] * oc[0] + L[1] * oc[1] + L[2] * oc[2];
+      const disc = b * b - (oc[0] * oc[0] + oc[1] * oc[1] + oc[2] * oc[2] - 1);
+      vis = !(disc > 0 && -b - Math.sqrt(disc) > 0 && -b - Math.sqrt(disc) < len);
+    } else {
+      if (!S.labels) { it.el.style.opacity = 0; continue; }
+      P = bodyToWorld(it.dir);
+      const nrm = [pos[0] - P[0], pos[1] - P[1], pos[2] - P[2]];
+      const nl = Math.hypot(nrm[0], nrm[1], nrm[2]) || 1;
+      vis = (P[0] * nrm[0] + P[1] * nrm[1] + P[2] * nrm[2]) / nl;
+      vis = vis > 0.62 ? sstep(0.62, 0.92, vis) : 0;
+    }
+    if (!vis) { it.el.style.opacity = 0; continue; }
+    const dv = [P[0] - pos[0], P[1] - pos[1], P[2] - pos[2]];
+    const z = dv[0] * f[0] + dv[1] * f[1] + dv[2] * f[2];
+    if (z <= 0.0001) { it.el.style.opacity = 0; continue; }
+    const x = (dv[0] * r[0] + dv[1] * r[1] + dv[2] * r[2]) / z / (TAN_HALF * (W / H));
+    const y = (dv[0] * u[0] + dv[1] * u[1] + dv[2] * u[2]) / z / TAN_HALF;
+    const sx = (x * 0.5 + 0.5) * W, sy = (0.5 - y * 0.5) * H;
+    if (sx < -80 || sy < -30 || sx > W + 80 || sy > H + 30) { it.el.style.opacity = 0; continue; }
+    it.el.style.transform = 'translate3d(' + sx.toFixed(1) + 'px,' + sy.toFixed(1) + 'px,0) translate(-3px,-50%)';
+    it.el.style.opacity = (typeof vis === 'number' ? vis : 1) * (it.earth ? 0.95 : 1);
+  }
+}
+
+/* ═══════════════════════ 11 · 观测数据 ═══════════════════════ */
+const ST = { src: $('#s-src'), d: $('#s-dist'), r: $('#s-res'), p: $('#s-phase'), l: $('#s-lit'), le: $('#s-lite'), s: $('#s-sub'), v: $('#s-relief') };
+let lastStat = 0;
+function updateStats(now) {
+  if (now - lastStat < 110) return;
+  lastStat = now;
+  const { pos } = camVectors();
+  const dR = Math.hypot(pos[0], pos[1], pos[2]);
+  const km = dR * R_KM;
+  const hpx = Math.max(1, canvas.clientHeight);
+  const res = 2 * dR * TAN_HALF * R_KM / hpx * 1000;
+  ST.d.textContent = fmt(Math.round(km), 0) + ' km';
+  ST.r.textContent = fmt(Math.round(res), 0) + ' m/px';
+  const L = sunDir();
+  const cph = clamp((pos[0] * L[0] + pos[1] * L[1] + pos[2] * L[2]) / dR, -1, 1);
+  const ph = Math.acos(cph) / DEG;
+  ST.p.textContent = ph.toFixed(1) + '°';
+  ST.l.textContent = ((1 + cph) / 2 * 100).toFixed(1) + '%';
+  ST.le.textContent = ((1 + Math.cos(S.alpha * DEG)) / 2 * 100).toFixed(1) + '%';
+  const [, w2b] = bodyMats();
+  const sb = [w2b[0] * L[0] + w2b[3] * L[1] + w2b[6] * L[2], w2b[1] * L[0] + w2b[4] * L[1] + w2b[7] * L[2], w2b[2] * L[0] + w2b[5] * L[1] + w2b[8] * L[2]];
+  const slat = Math.asin(clamp(sb[1], -1, 1)) / DEG;
+  const slon = Math.atan2(sb[0], sb[2]) / DEG;
+  ST.s.textContent = (slat >= 0 ? 'N' : 'S') + Math.abs(slat).toFixed(1) + '° ' + (slon >= 0 ? 'E' : 'W') + Math.abs(slon).toFixed(1) + '°';
+  ST.v.textContent = H_MIN.toFixed(1) + ' ~ ' + (H_MAX >= 0 ? '+' : '') + H_MAX.toFixed(1) + ' km';
+}
+
+/* ═══════════════════════ 12 · 渲染主循环 ═══════════════════════ */
+let dpr = 1, fadeIn = 0, t0 = 0;
+function resize() {
+  dpr = Math.min(devicePixelRatio || 1, 2);
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if (w * h * dpr * dpr > 5.6e6) dpr = Math.max(1, dpr * 0.72);
+  const nw = Math.max(2, Math.round(w * dpr)), nh = Math.max(2, Math.round(h * dpr));
+  if (canvas.width !== nw || canvas.height !== nh) { canvas.width = nw; canvas.height = nh; }
+}
+addEventListener('resize', resize);
+
+function draw(now) {
+  if (!ready) return;
+  const { pos, f, r, u } = camVectors();
+  const mats = bodyMats();
+  resize();
+  gl.viewport(0, 0, canvas.width, canvas.height);
+  const W = canvas.width, H = canvas.height;
+  gl.uniform1f(U.uTanHalf, TAN_HALF);
+  gl.uniform1f(U.uAspect, W / H);
+  gl.uniform1f(U.uPxAng, 2 * TAN_HALF / H);
+  gl.uniform2f(U.uADec, ADEC[0], ADEC[1]);
+  gl.uniform2f(U.uTexSize, TEX_W, TEX_H);
+  gl.uniform1f(U.uDetGain, DET_GAIN);
+  gl.uniform1f(U.uTime, now * 0.001);
+  gl.uniform1f(U.uFade, fadeIn);
+  gl.uniform1f(U.uHMin, H_MIN);
+  gl.uniform1f(U.uHRange, H_MAX - H_MIN);
+  gl.uniform3fv(U.uCam, pos);
+  gl.uniform3fv(U.uRight, r);
+  gl.uniform3fv(U.uUp, u);
+  gl.uniform3fv(U.uFwd, f);
+  const L = sunDir();
+  gl.uniform3fv(U.uSun, L);
+  gl.uniform3fv(U.uEarthPos, [0, 0, EARTH_DIST]);
+  gl.uniformMatrix3fv(U.uB2W, false, mats[0]);
+  gl.uniformMatrix3fv(U.uW2B, false, mats[1]);
+  gl.uniform1f(U.uExposure, S.exposure);
+  gl.uniform1f(U.uEarthshine, S.earthshine);
+  gl.uniform1f(U.uSurge, S.surge);
+  gl.uniform1f(U.uRelief, S.relief);
+  gl.uniform1f(U.uDust, S.dust);
+  gl.uniform1f(U.uStars, S.stars ? 1 : 0);
+  gl.uniform1f(U.uEarth, S.earth ? 1 : 0);
+  gl.uniform1f(U.uWire, S.wire ? 1 : 0);
+  gl.uniform1f(U.uGrid, S.grid ? 1 : 0);
+  // 线框密度：保持屏幕上每格约 26 px
+  const dR = Math.hypot(pos[0], pos[1], pos[2]);
+  const pxPerR = H / (2 * dR * TAN_HALF);
+  const want = (15 / pxPerR) / DEG;
+  const steps = [30, 20, 15, 10, 7.5, 5, 3, 2, 1.5, 1, 0.75, 0.5, 0.3, 0.2, 0.12, 0.06];
+  let ws = steps[0];
+  for (const s of steps) { if (want >= s) { ws = s; break; } ws = s; }
+  gl.uniform1f(U.uWireStep, ws);
+  gl.uniform1f(U.uGridStep, 15);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, hTex); gl.uniform1i(U.uH, 0);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, aTex); gl.uniform1i(U.uA, 1);
+  gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, eTex); gl.uniform1i(U.uE, 2);
+  gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, dTex); gl.uniform1i(U.uD, 3);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+}
+
+let lastT = 0;
+function frame(now) {
+  requestAnimationFrame(frame);
+  const dt = Math.min(0.05, (now - lastT) / 1000 || 0.016);
+  lastT = now;
+  // 补间
+  if (anim) {
+    const p = clamp((now - anim.t0) / anim.dur, 0, 1), e = EASE(p);
+    const A = anim.from, B = anim.to;
+    S.yaw = A.yaw + (B.yaw - A.yaw) * e;
+    S.pitch = A.pitch + (B.pitch - A.pitch) * e;
+    S.dist = A.dist + (B.dist - A.dist) * e;
+    if (A.alpha !== B.alpha) SLIDERS.alpha.set(A.alpha + (B.alpha - A.alpha) * e, true);
+    for (let i = 0; i < 3; i++) S.off[i] = A.off[i] + (B.off[i] - A.off[i]) * e;
+    if (p >= 1) anim = null;
+  } else if (!ptrs.size) {
+    // 惯性
+    if (Math.abs(S.velYaw) > 1e-5 || Math.abs(S.velPitch) > 1e-5) {
+      S.yaw += S.velYaw; S.pitch = clamp(S.pitch + S.velPitch, -1.5533, 1.5533);
+      S.velYaw *= 0.94; S.velPitch *= 0.94;
+    } else if (S.orbit) {
+      S.yaw += dt * 0.045;                       // 相机自动环绕
+    }
+  }
+  if (S.spin) S.spinPhase += dt * 0.06;
+  if (fadeIn < 1) fadeIn = Math.min(1, fadeIn + dt * 0.55);
+  draw(now);
+  updateLabels();
+  updateStats(now);
+}
+
+/* ═══════════════════════ 13 · 启动 ═══════════════════════ */
+const lbar = $('#lbar'), ltext = $('#ltext');
+function step(pct, txt) { lbar.style.width = pct + '%'; if (txt) ltext.textContent = txt; }
+async function boot() {
+  if (!gl) return;
+  try {
+    step(2, '编译渲染管线…');
+    initGL();
+    let moon = await tryLoadReal(step);
+    if (!moon) { step(4, '生成月面地形…'); moon = await buildMoon(step); }
+    TEX_W = moon.W; TEX_H = moon.HT;
+    H_MIN = moon.hMin; H_MAX = moon.hMax;
+    DATA_SRC = moon.src;
+    DET_GAIN = moon.detGain === undefined ? 1.0 : moon.detGain;
+    step(96, '准备地球与星空…');
+    const earth = buildEarth();
+    await raf();
+    // 高度纹理：RG8 打包 16bit（高低字节），可 mipmap，全平台一致
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    const h8 = moon.h8;
+    hTex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, hTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG8, moon.W, moon.HT, 0, gl.RG, gl.UNSIGNED_BYTE, h8);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    if (aniso) gl.texParameterf(gl.TEXTURE_2D, aniso.TEXTURE_MAX_ANISOTROPY_EXT, 8);
+    // 反照率纹理：RG8 打包 16bit（高低字节），全平台可 mipmap
+    aTex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, aTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG8, moon.aw, moon.ah, 0, gl.RG, gl.UNSIGNED_BYTE, moon.a8);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    ADEC = [0.996109, 0.003891];
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    if (aniso) gl.texParameterf(gl.TEXTURE_2D, aniso.TEXTURE_MAX_ANISOTROPY_EXT, 8);
+    // 月壤细节图
+    const det = buildDetail();
+    dTex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, dTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, det.W, det.HT, 0, gl.RGBA, gl.UNSIGNED_BYTE, det.data);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    if (aniso) gl.texParameterf(gl.TEXTURE_2D, aniso.TEXTURE_MAX_ANISOTROPY_EXT, 8);
+    // 地球
+    eTex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, eTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, earth.W, earth.HT, 0, gl.RGBA, gl.UNSIGNED_BYTE, earth.data);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    ready = true;
+    window.__LUNA = { moon: moon, S: S, camVectors: camVectors };
+    resize();
+    step(100, '完成');
+    ST.src.textContent = DATA_SRC === '程序化生成' ? DATA_SRC : 'LRO LOLA+WAC';
+    if (DATA_SRC === '程序化生成') $('#keyhint').textContent = 'H 隐藏界面 · 真实数据模式：双击「启动.command」';
+    ST.src.title = DATA_SRC;
+    updateStats(performance.now());
+    requestAnimationFrame(frame);
+    setTimeout(() => $('#loading').classList.add('done'), 260);
+  } catch (err) {
+    fatal('初始化失败<br><span style="opacity:.55">' + (err && err.message ? err.message : err) + '</span>');
+    throw err;
+  }
+}
+boot();
+</script>
+</body>
+</html>
