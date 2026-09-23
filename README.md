@@ -9,6 +9,8 @@
 
 ![月面特写](preview_closeup.png)
 
+**在线版**：https://hruiccc.github.io/luna/ （GitHub Pages，真实数据模式直接可用）
+
 ## 两种月面数据模式
 
 **① 真实数据模式（推荐）——双击 `启动.command`**
