@@ -1375,10 +1375,10 @@ canvas.addEventListener('pointermove', e => {
   const dx = e.clientX - p.x, dy = e.clientY - p.y;
   p.x = e.clientX; p.y = e.clientY;
   if (ptrs.size === 1) {
-    const k = 0.0042 * (S.pitch > 1.45 ? 0.35 : 1);
-    S.yaw -= dx * 0.0042;
+    const k = 0.0024 * (S.pitch > 1.45 ? 0.35 : 1);
+    S.yaw -= dx * 0.0024;
     S.pitch = clamp(S.pitch + dy * k, -1.5533, 1.5533);
-    S.velYaw = -dx * 0.0042 * 0.55; S.velPitch = dy * k * 0.55;
+    S.velYaw = -dx * 0.0024 * 0.30; S.velPitch = dy * k * 0.30;
   } else if (ptrs.size >= 2) {
     const [a, b] = [...ptrs.values()];
     const d = Math.hypot(a.x - b.x, a.y - b.y);
@@ -1597,7 +1597,7 @@ function frame(now) {
     // 惯性
     if (Math.abs(S.velYaw) > 1e-5 || Math.abs(S.velPitch) > 1e-5) {
       S.yaw += S.velYaw; S.pitch = clamp(S.pitch + S.velPitch, -1.5533, 1.5533);
-      S.velYaw *= 0.94; S.velPitch *= 0.94;
+      S.velYaw *= 0.88; S.velPitch *= 0.88;
     } else if (S.orbit) {
       S.yaw += dt * 0.045;                       // 相机自动环绕
     }
